@@ -1,0 +1,40 @@
+[project]
+name = "blockbuster"
+version = "0.1.0"
+description = "Utility to detect blocking calls in the async event loop"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "forbiddenfruit>=0.1.4",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest>=8.3.3",
+    "ruff>=0.7.4",
+    "requests>=2.32.3",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "CPY", # Missing copyright
+    "COM812", # Messes with the formatter
+    "ISC001", # Messes with the formatter
+    "PERF203", # Rarely useful
+    "PLR09", # Too many something (arg, statements, etc)
+
+    # Rules that are TODOs
+    "ANN",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D1",
+    "S101",
+]
