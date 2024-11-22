@@ -15,6 +15,7 @@ dev = [
     "pytest>=8.3.3",
     "ruff>=0.7.4",
     "requests>=2.32.3",
+    "types-requests>=2.32.0.20241016",
 ]
 
 [tool.pytest.ini_options]
@@ -38,3 +39,14 @@ ignore = [
     "D1",
     "S101",
 ]
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+pretty = true
+show_error_codes = true
+show_error_context = true
+
+[[tool.mypy.overrides]]
+module = "forbiddenfruit.*"
+ignore_missing_imports = true

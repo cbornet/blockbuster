@@ -1,5 +1,7 @@
 """BlockBuster module."""
 
+from __future__ import annotations
+
 import asyncio
 import inspect
 import io
@@ -9,15 +11,19 @@ import ssl
 import sys
 import time
 from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
 
 import forbiddenfruit
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
 
 
 class BlockingError(Exception):
     """BlockingError class."""
 
 
-def _blocking_error(func):
+def _blocking_error(func: Callable[..., Any]) -> BlockingError:
     if inspect.isbuiltin(func):
         msg = f"Blocking call to {func.__qualname__} ({func.__self__})"
     elif inspect.ismethoddescriptor(func):
@@ -27,10 +33,14 @@ def _blocking_error(func):
     return BlockingError(msg)
 
 
-def wrap_blocking(func, stack_excludes, func_excludes):
+def wrap_blocking(
+    func: Callable[..., Any],
+    stack_excludes: list[tuple[str, Iterable[str]]],
+    func_excludes: list[Callable[..., bool]],
+) -> Callable[..., Any]:
     """Wrap blocking function."""
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -55,26 +65,24 @@ class BlockBusterFunction:
 
     def __init__(
         self,
-        module,
+        module: Any,
         func_name: str,
         *,
-        is_immutable=False,
-        stack_excludes=None,
-        func_excludes=None,
-        checker_func=wrap_blocking,
+        is_immutable: bool = False,
+        stack_excludes: list[tuple[str, Iterable[str]]] | None = None,
+        func_excludes: list[Callable[..., bool]] | None = None,
     ):
         """Initialize BlockBusterFunction."""
         self.module = module
         self.func_name = func_name
         self.original_func = getattr(module, func_name)
         self.is_immutable = is_immutable
-        self.stack_excludes = stack_excludes or []
-        self.func_excludes = func_excludes or []
-        self.checker_func = checker_func
+        self.stack_excludes: list[tuple[str, Iterable[str]]] = stack_excludes or []
+        self.func_excludes: list[Callable[..., bool]] = func_excludes or []
 
-    def wrap_blocking(self):
+    def wrap_blocking(self) -> None:
         """Wrap the function."""
-        checker = self.checker_func(
+        checker = wrap_blocking(
             self.original_func, self.stack_excludes, self.func_excludes
         )
         if self.is_immutable:
@@ -82,7 +90,7 @@ class BlockBusterFunction:
         else:
             setattr(self.module, self.func_name, checker)
 
-    def unwrap_blocking(self):
+    def unwrap_blocking(self) -> None:
         """Unwrap the function."""
         if self.is_immutable:
             forbiddenfruit.curse(self.module, self.func_name, self.original_func)
@@ -90,7 +98,7 @@ class BlockBusterFunction:
             setattr(self.module, self.func_name, self.original_func)
 
 
-def _get_time_wrapped_functions():
+def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
     return {
         "time.sleep": BlockBusterFunction(
             time,
@@ -100,8 +108,8 @@ def _get_time_wrapped_functions():
     }
 
 
-def _get_os_wrapped_functions():
-    def os_exclude(fd, *_, **__):
+def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
+    def os_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return not os.get_blocking(fd)
 
     return {
@@ -110,8 +118,8 @@ def _get_os_wrapped_functions():
     }
 
 
-def _get_io_wrapped_functions():
-    def file_write_exclude(file, *_, **__):
+def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
+    def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
         return file in {sys.stdout, sys.stderr}
 
     return {
@@ -152,11 +160,11 @@ def _get_io_wrapped_functions():
     }
 
 
-def _socket_exclude(sock, *_, **__):
+def _socket_exclude(sock: socket.socket, *_: Any, **__: Any) -> bool:
     return not sock.getblocking()
 
 
-def _get_socket_wrapped_functions():
+def _get_socket_wrapped_functions() -> dict[str, BlockBusterFunction]:
     return {
         f"socket.socket.{method}": BlockBusterFunction(
             socket.socket, method, func_excludes=[_socket_exclude]
@@ -176,7 +184,7 @@ def _get_socket_wrapped_functions():
     }
 
 
-def _get_ssl_wrapped_functions():
+def _get_ssl_wrapped_functions() -> dict[str, BlockBusterFunction]:
     return {
         f"ssl.SSLSocket.{method}": BlockBusterFunction(
             ssl.SSLSocket, method, func_excludes=[_socket_exclude]
@@ -188,7 +196,7 @@ def _get_ssl_wrapped_functions():
 class BlockBuster:
     """BlockBuster class."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize BlockBuster."""
         self.wrapped_functions = (
             _get_time_wrapped_functions()
@@ -198,19 +206,19 @@ class BlockBuster:
             | _get_ssl_wrapped_functions()
         )
 
-    def init(self):
+    def init(self) -> None:
         """Wrap all functions."""
         for wrapped_function in self.wrapped_functions.values():
             wrapped_function.wrap_blocking()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Unwrap all wrapped functions."""
         for wrapped_function in self.wrapped_functions.values():
             wrapped_function.unwrap_blocking()
 
 
 @contextmanager
-def blockbuster_ctx():
+def blockbuster_ctx() -> Iterator[BlockBuster]:
     """Context manager for using BlockBuster."""
     blockbuster = BlockBuster()
     blockbuster.init()

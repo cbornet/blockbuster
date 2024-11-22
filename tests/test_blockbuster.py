@@ -6,28 +6,29 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 import requests
 
-from blockbuster import BlockingError, blockbuster_ctx
+from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
 
 
 @pytest.fixture(autouse=True)
-def blockbuster():
+def blockbuster() -> Iterator[BlockBuster]:
     with blockbuster_ctx() as bb:
         yield bb
 
 
-async def test_time_sleep():
+async def test_time_sleep() -> None:
     with pytest.raises(
         BlockingError, match=re.escape("sleep (<module 'time' (built-in)>")
     ):
         time.sleep(1)  # noqa: ASYNC251
 
 
-async def test_os_read():
+async def test_os_read() -> None:
     fd = os.open("/dev/null", os.O_RDONLY)
     with pytest.raises(
         BlockingError, match=re.escape("read (<module 'posix' (built-in)>")
@@ -35,12 +36,12 @@ async def test_os_read():
         os.read(fd, 1)
 
 
-async def test_os_read_non_blocking():
+async def test_os_read_non_blocking() -> None:
     fd = os.open("/dev/null", os.O_NONBLOCK | os.O_RDONLY)
     os.read(fd, 1)
 
 
-async def test_os_write():
+async def test_os_write() -> None:
     fd = os.open("/dev/null", os.O_RDWR)
     with pytest.raises(
         BlockingError, match=re.escape("write (<module 'posix' (built-in)>")
@@ -48,7 +49,7 @@ async def test_os_write():
         os.write(fd, b"foo")
 
 
-async def test_os_write_non_blocking():
+async def test_os_write_non_blocking() -> None:
     fd = os.open("/dev/null", os.O_NONBLOCK | os.O_RDWR)
     os.write(fd, b"foo")
 
@@ -56,7 +57,7 @@ async def test_os_write_non_blocking():
 PORT = 65432
 
 
-def tcp_server():
+def tcp_server() -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", PORT))
         s.listen()
@@ -70,7 +71,7 @@ def tcp_server():
                 conn.sendall(data)
 
 
-async def test_socket_connect():
+async def test_socket_connect() -> None:
     with (
         socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s,
         pytest.raises(BlockingError, match="method 'connect' of '_socket.socket'"),
@@ -78,7 +79,7 @@ async def test_socket_connect():
         s.connect(("127.0.0.1", PORT))
 
 
-async def test_socket_send():
+async def test_socket_send() -> None:
     t = threading.Thread(target=tcp_server)
     t.start()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -93,7 +94,7 @@ async def test_socket_send():
     await asyncio.to_thread(t.join)
 
 
-async def test_socket_send_non_blocking():
+async def test_socket_send_non_blocking() -> None:
     t = threading.Thread(target=tcp_server)
     t.start()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -108,13 +109,13 @@ async def test_socket_send_non_blocking():
     await asyncio.to_thread(t.join)
 
 
-async def test_ssl_socket(blockbuster):
+async def test_ssl_socket(blockbuster: BlockBuster) -> None:
     blockbuster.wrapped_functions["socket.socket.connect"].unwrap_blocking()
     with pytest.raises(BlockingError, match="ssl.SSLSocket.send"):
         requests.get("https://google.com", timeout=10)  # noqa: ASYNC210
 
 
-async def test_file_text():
+async def test_file_text() -> None:
     with Path("/dev/null").open(mode="r+", encoding="utf-8") as f:  # noqa: ASYNC230
         assert isinstance(f, io.TextIOWrapper)
         with pytest.raises(
@@ -125,7 +126,7 @@ async def test_file_text():
             f.read(1)
 
 
-async def test_file_random():
+async def test_file_random() -> None:
     with Path("/dev/null").open(mode="r+b") as f:  # noqa: ASYNC230
         assert isinstance(f, io.BufferedRandom)
         with pytest.raises(
@@ -138,7 +139,7 @@ async def test_file_random():
             f.read(1)
 
 
-async def test_file_read_bytes():
+async def test_file_read_bytes() -> None:
     with Path("/dev/null").open(mode="rb") as f:  # noqa: ASYNC230
         assert isinstance(f, io.BufferedReader)
         with pytest.raises(
@@ -147,7 +148,7 @@ async def test_file_read_bytes():
             f.read(1)
 
 
-async def test_file_write_bytes():
+async def test_file_write_bytes() -> None:
     with Path("/dev/null").open(mode="wb") as f:  # noqa: ASYNC230
         assert isinstance(f, io.BufferedWriter)
         with pytest.raises(
@@ -156,23 +157,23 @@ async def test_file_write_bytes():
             f.write(b"foo")
 
 
-async def test_import_module_exclude():
+async def test_import_module_exclude() -> None:
     importlib.reload(requests)
 
 
-def allowed_read():
+def allowed_read() -> None:
     with Path("/dev/null").open(mode="rb") as f:
         f.read(1)
 
 
-async def test_custom_stack_exclude(blockbuster):
+async def test_custom_stack_exclude(blockbuster: BlockBuster) -> None:
     blockbuster.wrapped_functions["io.BufferedReader.read"].stack_excludes.append(
         ("tests/test_blockbuster.py", {"allowed_read"})
     )
     allowed_read()
 
 
-async def test_cleanup(blockbuster):
+async def test_cleanup(blockbuster: BlockBuster) -> None:
     blockbuster.cleanup()
     with Path("/dev/null").open(mode="wb") as f:  # noqa: ASYNC230
         f.write(b"foo")
