@@ -60,7 +60,7 @@ def tcp_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", PORT))
         s.listen()
-        conn, addr = s.accept()
+        conn, _addr = s.accept()
         with conn:
             while True:
                 conn.sendall(b"Hello, world")
@@ -115,7 +115,7 @@ async def test_ssl_socket(blockbuster):
 
 
 async def test_file_text():
-    with Path("/dev/null").open(mode="r+") as f:  # noqa: ASYNC230
+    with Path("/dev/null").open(mode="r+", encoding="utf-8") as f:  # noqa: ASYNC230
         assert isinstance(f, io.TextIOWrapper)
         with pytest.raises(
             BlockingError, match="method 'write' of '_io.TextIOWrapper'"

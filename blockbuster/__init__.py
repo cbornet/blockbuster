@@ -2,4 +2,4 @@
 
 from blockbuster.blockbuster import BlockBuster, BlockingError, blockbuster_ctx
 
-__all__ = ["BlockingError", "BlockBuster", "blockbuster_ctx"]
+__all__ = ["BlockBuster", "BlockingError", "blockbuster_ctx"]

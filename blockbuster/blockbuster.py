@@ -90,68 +90,77 @@ class BlockBusterFunction:
             setattr(self.module, self.func_name, self.original_func)
 
 
-class BlockBuster:
-    """BlockBuster class."""
+def _get_time_wrapped_functions():
+    return {
+        "time.sleep": BlockBusterFunction(
+            time,
+            "sleep",
+            stack_excludes=[("pydev/pydevd.py", {"_do_wait_suspend"})],
+        )
+    }
 
-    def __init__(self):
-        """Initialize BlockBuster."""
 
-        def os_exclude(fd, *_, **__):
-            return not os.get_blocking(fd)
+def _get_os_wrapped_functions():
+    def os_exclude(fd, *_, **__):
+        return not os.get_blocking(fd)
 
-        def socket_exclude(sock, *_, **__):
-            return not sock.getblocking()
+    return {
+        "os.read": BlockBusterFunction(os, "read", func_excludes=[os_exclude]),
+        "os.write": BlockBusterFunction(os, "write", func_excludes=[os_exclude]),
+    }
 
-        def file_write_exclude(file, *_, **__):
-            return file in {sys.stdout, sys.stderr}
 
-        self.wrapped_functions = {
-            "time.sleep": BlockBusterFunction(
-                time,
-                "sleep",
-                stack_excludes=[("pydev/pydevd.py", {"_do_wait_suspend"})],
-            ),
-            "io.BufferedReader.read": BlockBusterFunction(
-                io.BufferedReader,
-                "read",
-                is_immutable=True,
-                stack_excludes=[
-                    ("<frozen importlib._bootstrap_external>", {"get_data"}),
-                    ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
-                ],
-            ),
-            "io.BufferedWriter.write": BlockBusterFunction(
-                io.BufferedWriter,
-                "write",
-                is_immutable=True,
-                stack_excludes=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
-                func_excludes=[file_write_exclude],
-            ),
-            "io.BufferedRandom.read": BlockBusterFunction(
-                io.BufferedRandom, "read", is_immutable=True
-            ),
-            "io.BufferedRandom.write": BlockBusterFunction(
-                io.BufferedRandom,
-                "write",
-                is_immutable=True,
-                func_excludes=[file_write_exclude],
-            ),
-            "io.TextIOWrapper.read": BlockBusterFunction(
-                io.TextIOWrapper, "read", is_immutable=True
-            ),
-            "io.TextIOWrapper.write": BlockBusterFunction(
-                io.TextIOWrapper,
-                "write",
-                is_immutable=True,
-                func_excludes=[file_write_exclude],
-            ),
-        }
+def _get_io_wrapped_functions():
+    def file_write_exclude(file, *_, **__):
+        return file in {sys.stdout, sys.stderr}
 
-        for method in ("read", "write"):
-            self.wrapped_functions[f"os.{method}"] = BlockBusterFunction(
-                os, method, func_excludes=[os_exclude]
-            )
+    return {
+        "io.BufferedReader.read": BlockBusterFunction(
+            io.BufferedReader,
+            "read",
+            is_immutable=True,
+            stack_excludes=[
+                ("<frozen importlib._bootstrap_external>", {"get_data"}),
+                ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
+            ],
+        ),
+        "io.BufferedWriter.write": BlockBusterFunction(
+            io.BufferedWriter,
+            "write",
+            is_immutable=True,
+            stack_excludes=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
+            func_excludes=[file_write_exclude],
+        ),
+        "io.BufferedRandom.read": BlockBusterFunction(
+            io.BufferedRandom, "read", is_immutable=True
+        ),
+        "io.BufferedRandom.write": BlockBusterFunction(
+            io.BufferedRandom,
+            "write",
+            is_immutable=True,
+            func_excludes=[file_write_exclude],
+        ),
+        "io.TextIOWrapper.read": BlockBusterFunction(
+            io.TextIOWrapper, "read", is_immutable=True
+        ),
+        "io.TextIOWrapper.write": BlockBusterFunction(
+            io.TextIOWrapper,
+            "write",
+            is_immutable=True,
+            func_excludes=[file_write_exclude],
+        ),
+    }
 
+
+def _socket_exclude(sock, *_, **__):
+    return not sock.getblocking()
+
+
+def _get_socket_wrapped_functions():
+    return {
+        f"socket.socket.{method}": BlockBusterFunction(
+            socket.socket, method, func_excludes=[_socket_exclude]
+        )
         for method in (
             "connect",
             "accept",
@@ -163,15 +172,31 @@ class BlockBuster:
             "recvfrom",
             "recvfrom_into",
             "recvmsg",
-        ):
-            self.wrapped_functions[f"socket.socket.{method}"] = BlockBusterFunction(
-                socket.socket, method, func_excludes=[socket_exclude]
-            )
+        )
+    }
 
-        for method in ("write", "send", "read", "recv"):
-            self.wrapped_functions[f"ssl.SSLSocket.{method}"] = BlockBusterFunction(
-                ssl.SSLSocket, method, func_excludes=[socket_exclude]
-            )
+
+def _get_ssl_wrapped_functions():
+    return {
+        f"ssl.SSLSocket.{method}": BlockBusterFunction(
+            ssl.SSLSocket, method, func_excludes=[_socket_exclude]
+        )
+        for method in ("write", "send", "read", "recv")
+    }
+
+
+class BlockBuster:
+    """BlockBuster class."""
+
+    def __init__(self):
+        """Initialize BlockBuster."""
+        self.wrapped_functions = (
+            _get_time_wrapped_functions()
+            | _get_os_wrapped_functions()
+            | _get_io_wrapped_functions()
+            | _get_socket_wrapped_functions()
+            | _get_ssl_wrapped_functions()
+        )
 
     def init(self):
         """Wrap all functions."""
