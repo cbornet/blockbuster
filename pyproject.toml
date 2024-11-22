@@ -3,10 +3,29 @@ name = "blockbuster"
 version = "0.1.0"
 description = "Utility to detect blocking calls in the async event loop"
 readme = "README.md"
+keywords = ["async", "block", "detect", "event loop", "asyncio"]
+authors = [
+    { name = "Christophe Bornet", email = "bornet.chris@gmail.com" },
+]
 requires-python = ">=3.9"
 dependencies = [
     "forbiddenfruit>=0.1.4",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Repository = "https://github.com/cbornet/blockbuster.git"
+Issues = "https://github.com/cbornet/blockbuster/issues"
 
 [dependency-groups]
 dev = [
@@ -50,3 +69,6 @@ show_error_context = true
 [[tool.mypy.overrides]]
 module = "forbiddenfruit.*"
 ignore_missing_imports = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["blockbuster"]
