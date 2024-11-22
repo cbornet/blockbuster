@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import importlib
 import io
 import os
@@ -63,12 +64,9 @@ def tcp_server() -> None:
         s.listen()
         conn, _addr = s.accept()
         with conn:
-            while True:
-                conn.sendall(b"Hello, world")
-                data = conn.recv(1024)
-                if not data:
-                    break
-                conn.sendall(data)
+            conn.sendall(b"Hello, world")
+            with contextlib.suppress(ConnectionResetError):
+                conn.recv(1024)
 
 
 async def test_socket_connect() -> None:
