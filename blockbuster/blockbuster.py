@@ -7,6 +7,7 @@ import inspect
 import io
 import os
 import socket
+import sqlite3
 import ssl
 import sys
 import time
@@ -201,6 +202,27 @@ def _get_ssl_wrapped_functions() -> dict[str, BlockBusterFunction]:
     }
 
 
+def _get_sqlite_wrapped_functions() -> dict[str, BlockBusterFunction]:
+    return {
+        f"sqlite3.Cursor.{method}": BlockBusterFunction(
+            sqlite3.Cursor, method, is_immutable=True
+        )
+        for method in (
+            "execute",
+            "executemany",
+            "executescript",
+            "fetchone",
+            "fetchmany",
+            "fetchall",
+        )
+    } | {
+        f"sqlite3.Connection.{method}": BlockBusterFunction(
+            sqlite3.Connection, method, is_immutable=True
+        )
+        for method in ("execute", "executemany", "executescript", "commit", "rollback")
+    }
+
+
 class BlockBuster:
     """BlockBuster class."""
 
@@ -212,6 +234,7 @@ class BlockBuster:
             | _get_io_wrapped_functions()
             | _get_socket_wrapped_functions()
             | _get_ssl_wrapped_functions()
+            | _get_sqlite_wrapped_functions()
         )
 
     def activate(self) -> None:

@@ -5,6 +5,7 @@ import io
 import os
 import re
 import socket
+import sqlite3
 import threading
 import time
 from collections.abc import Iterator
@@ -155,7 +156,24 @@ async def test_file_write_bytes() -> None:
             f.write(b"foo")
 
 
-async def test_import_module_exclude() -> None:
+async def test_sqlite_connnection_execute() -> None:
+    with (
+        contextlib.closing(sqlite3.connect(":memory:")) as connection,
+        pytest.raises(BlockingError, match="method 'execute' of 'sqlite3.Connection'"),
+    ):
+        connection.execute("SELECT 1")
+
+
+async def test_sqlite_cursor_execute() -> None:
+    with (
+        contextlib.closing(sqlite3.connect(":memory:")) as connection,
+        contextlib.closing(connection.cursor()) as cursor,
+        pytest.raises(BlockingError, match="method 'execute' of 'sqlite3.Cursor'"),
+    ):
+        cursor.execute("SELECT 1")
+
+
+async def test_import_module() -> None:
     importlib.reload(requests)
 
 
