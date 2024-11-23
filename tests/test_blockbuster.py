@@ -108,7 +108,7 @@ async def test_socket_send_non_blocking() -> None:
 
 
 async def test_ssl_socket(blockbuster: BlockBuster) -> None:
-    blockbuster.wrapped_functions["socket.socket.connect"].unwrap_blocking()
+    blockbuster.functions["socket.socket.connect"].deactivate()
     with pytest.raises(BlockingError, match="ssl.SSLSocket.send"):
         requests.get("https://google.com", timeout=10)  # noqa: ASYNC210
 
@@ -165,13 +165,13 @@ def allowed_read() -> None:
 
 
 async def test_custom_stack_exclude(blockbuster: BlockBuster) -> None:
-    blockbuster.wrapped_functions["io.BufferedReader.read"].stack_excludes.append(
+    blockbuster.functions["io.BufferedReader.read"].can_block_functions.append(
         ("tests/test_blockbuster.py", {"allowed_read"})
     )
     allowed_read()
 
 
 async def test_cleanup(blockbuster: BlockBuster) -> None:
-    blockbuster.cleanup()
+    blockbuster.deactivate()
     with Path("/dev/null").open(mode="wb") as f:  # noqa: ASYNC230
         f.write(b"foo")

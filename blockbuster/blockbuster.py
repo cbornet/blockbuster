@@ -33,10 +33,10 @@ def _blocking_error(func: Callable[..., Any]) -> BlockingError:
     return BlockingError(msg)
 
 
-def wrap_blocking(
+def _wrap_blocking(
     func: Callable[..., Any],
-    stack_excludes: list[tuple[str, Iterable[str]]],
-    func_excludes: list[Callable[..., bool]],
+    can_block_functions: list[tuple[str, Iterable[str]]],
+    can_block_predicate: Callable[..., bool],
 ) -> Callable[..., Any]:
     """Wrap blocking function."""
 
@@ -45,16 +45,15 @@ def wrap_blocking(
             asyncio.get_running_loop()
         except RuntimeError:
             return func(*args, **kwargs)
-        for filename, functions in stack_excludes:
+        for filename, functions in can_block_functions:
             for frame_info in inspect.stack():
                 if (
                     frame_info.filename.endswith(filename)
                     and frame_info.function in functions
                 ):
                     return func(*args, **kwargs)
-        for func_exclude in func_excludes:
-            if func_exclude(*args, **kwargs):
-                return func(*args, **kwargs)
+        if can_block_predicate(*args, **kwargs):
+            return func(*args, **kwargs)
         raise _blocking_error(func)
 
     return wrapper
@@ -69,29 +68,38 @@ class BlockBusterFunction:
         func_name: str,
         *,
         is_immutable: bool = False,
-        stack_excludes: list[tuple[str, Iterable[str]]] | None = None,
-        func_excludes: list[Callable[..., bool]] | None = None,
+        can_block_functions: list[tuple[str, Iterable[str]]] | None = None,
+        can_block_predicate: Callable[..., bool] = lambda *_, **__: False,
     ):
         """Initialize BlockBusterFunction."""
         self.module = module
         self.func_name = func_name
         self.original_func = getattr(module, func_name)
         self.is_immutable = is_immutable
-        self.stack_excludes: list[tuple[str, Iterable[str]]] = stack_excludes or []
-        self.func_excludes: list[Callable[..., bool]] = func_excludes or []
+        self.can_block_functions: list[tuple[str, Iterable[str]]] = (
+            can_block_functions or []
+        )
+        self.can_block_predicate: Callable[..., bool] = can_block_predicate
+        self.activated = False
 
-    def wrap_blocking(self) -> None:
+    def activate(self) -> None:
         """Wrap the function."""
-        checker = wrap_blocking(
-            self.original_func, self.stack_excludes, self.func_excludes
+        if self.activated:
+            return
+        self.activated = True
+        checker = _wrap_blocking(
+            self.original_func, self.can_block_functions, self.can_block_predicate
         )
         if self.is_immutable:
             forbiddenfruit.curse(self.module, self.func_name, checker)
         else:
             setattr(self.module, self.func_name, checker)
 
-    def unwrap_blocking(self) -> None:
+    def deactivate(self) -> None:
         """Unwrap the function."""
+        if not self.activated:
+            return
+        self.activated = False
         if self.is_immutable:
             forbiddenfruit.curse(self.module, self.func_name, self.original_func)
         else:
@@ -103,7 +111,7 @@ def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "time.sleep": BlockBusterFunction(
             time,
             "sleep",
-            stack_excludes=[("pydev/pydevd.py", {"_do_wait_suspend"})],
+            can_block_functions=[("pydev/pydevd.py", {"_do_wait_suspend"})],
         )
     }
 
@@ -113,8 +121,8 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         return not os.get_blocking(fd)
 
     return {
-        "os.read": BlockBusterFunction(os, "read", func_excludes=[os_exclude]),
-        "os.write": BlockBusterFunction(os, "write", func_excludes=[os_exclude]),
+        "os.read": BlockBusterFunction(os, "read", can_block_predicate=os_exclude),
+        "os.write": BlockBusterFunction(os, "write", can_block_predicate=os_exclude),
     }
 
 
@@ -127,7 +135,7 @@ def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
             io.BufferedReader,
             "read",
             is_immutable=True,
-            stack_excludes=[
+            can_block_functions=[
                 ("<frozen importlib._bootstrap_external>", {"get_data"}),
                 ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
             ],
@@ -136,8 +144,8 @@ def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
             io.BufferedWriter,
             "write",
             is_immutable=True,
-            stack_excludes=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
-            func_excludes=[file_write_exclude],
+            can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
+            can_block_predicate=file_write_exclude,
         ),
         "io.BufferedRandom.read": BlockBusterFunction(
             io.BufferedRandom, "read", is_immutable=True
@@ -146,7 +154,7 @@ def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
             io.BufferedRandom,
             "write",
             is_immutable=True,
-            func_excludes=[file_write_exclude],
+            can_block_predicate=file_write_exclude,
         ),
         "io.TextIOWrapper.read": BlockBusterFunction(
             io.TextIOWrapper, "read", is_immutable=True
@@ -155,7 +163,7 @@ def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
             io.TextIOWrapper,
             "write",
             is_immutable=True,
-            func_excludes=[file_write_exclude],
+            can_block_predicate=file_write_exclude,
         ),
     }
 
@@ -167,7 +175,7 @@ def _socket_exclude(sock: socket.socket, *_: Any, **__: Any) -> bool:
 def _get_socket_wrapped_functions() -> dict[str, BlockBusterFunction]:
     return {
         f"socket.socket.{method}": BlockBusterFunction(
-            socket.socket, method, func_excludes=[_socket_exclude]
+            socket.socket, method, can_block_predicate=_socket_exclude
         )
         for method in (
             "connect",
@@ -187,7 +195,7 @@ def _get_socket_wrapped_functions() -> dict[str, BlockBusterFunction]:
 def _get_ssl_wrapped_functions() -> dict[str, BlockBusterFunction]:
     return {
         f"ssl.SSLSocket.{method}": BlockBusterFunction(
-            ssl.SSLSocket, method, func_excludes=[_socket_exclude]
+            ssl.SSLSocket, method, can_block_predicate=_socket_exclude
         )
         for method in ("write", "send", "read", "recv")
     }
@@ -198,7 +206,7 @@ class BlockBuster:
 
     def __init__(self) -> None:
         """Initialize BlockBuster."""
-        self.wrapped_functions = (
+        self.functions = (
             _get_time_wrapped_functions()
             | _get_os_wrapped_functions()
             | _get_io_wrapped_functions()
@@ -206,21 +214,21 @@ class BlockBuster:
             | _get_ssl_wrapped_functions()
         )
 
-    def init(self) -> None:
+    def activate(self) -> None:
         """Wrap all functions."""
-        for wrapped_function in self.wrapped_functions.values():
-            wrapped_function.wrap_blocking()
+        for wrapped_function in self.functions.values():
+            wrapped_function.activate()
 
-    def cleanup(self) -> None:
+    def deactivate(self) -> None:
         """Unwrap all wrapped functions."""
-        for wrapped_function in self.wrapped_functions.values():
-            wrapped_function.unwrap_blocking()
+        for wrapped_function in self.functions.values():
+            wrapped_function.deactivate()
 
 
 @contextmanager
 def blockbuster_ctx() -> Iterator[BlockBuster]:
     """Context manager for using BlockBuster."""
     blockbuster = BlockBuster()
-    blockbuster.init()
+    blockbuster.activate()
     yield blockbuster
-    blockbuster.cleanup()
+    blockbuster.deactivate()
