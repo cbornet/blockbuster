@@ -112,7 +112,10 @@ def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "time.sleep": BlockBusterFunction(
             time,
             "sleep",
-            can_block_functions=[("pydev/pydevd.py", {"_do_wait_suspend"})],
+            can_block_functions=[
+                ("pydev/pydevd.py", {"_do_wait_suspend"}),
+                ("pydevd/pydevd.py", {"_do_wait_suspend"}),
+            ],
         )
     }
 
