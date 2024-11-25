@@ -79,33 +79,29 @@ async def test_socket_connect() -> None:
 
 
 async def test_socket_send() -> None:
-    t = threading.Thread(target=tcp_server)
-    t.start()
+    tcp_server_task = asyncio.create_task(asyncio.to_thread(tcp_server))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         while True:
-            try:
+            with contextlib.suppress(ConnectionRefusedError):
+                await asyncio.sleep(0.1)
                 await asyncio.to_thread(s.connect, ("127.0.0.1", PORT))
                 break
-            except ConnectionRefusedError:
-                await asyncio.sleep(0.1)
         with pytest.raises(BlockingError, match="method 'send' of '_socket.socket'"):
             s.send(b"Hello, world")
-    await asyncio.to_thread(t.join)
+    await tcp_server_task
 
 
 async def test_socket_send_non_blocking() -> None:
-    t = threading.Thread(target=tcp_server)
-    t.start()
+    tcp_server_task = asyncio.create_task(asyncio.to_thread(tcp_server))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         while True:
-            try:
+            with contextlib.suppress(ConnectionRefusedError):
+                await asyncio.sleep(0.1)
                 await asyncio.to_thread(s.connect, ("127.0.0.1", PORT))
                 break
-            except ConnectionRefusedError:
-                await asyncio.sleep(0.1)
         s.setblocking(False)  # noqa: FBT003
         s.send(b"Hello, world")
-    await asyncio.to_thread(t.join)
+    await tcp_server_task
 
 
 async def test_ssl_socket(blockbuster: BlockBuster) -> None:
@@ -171,6 +167,29 @@ async def test_sqlite_cursor_execute() -> None:
         pytest.raises(BlockingError, match="method 'execute' of 'sqlite3.Cursor'"),
     ):
         cursor.execute("SELECT 1")
+
+
+async def test_lock() -> None:
+    lock = threading.Lock()
+    assert lock.acquire() is True
+    with pytest.raises(BlockingError, match="method 'acquire' of '_thread.lock'"):
+        lock.acquire()
+
+
+async def test_lock_timeout_zero() -> None:
+    lock = threading.Lock()
+    assert lock.acquire() is True
+    assert lock.acquire(timeout=0) is False
+
+
+async def test_lock_non_blocking() -> None:
+    lock = threading.Lock()
+    assert lock.acquire() is True
+    assert lock.acquire(blocking=False) is False
+
+
+async def test_run_in_executor() -> None:
+    await asyncio.to_thread(time.sleep, 0.1)
 
 
 async def test_import_module() -> None:
