@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import _thread
 import asyncio
 import inspect
 import io
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import forbiddenfruit
 
 if TYPE_CHECKING:
+    import threading
     from collections.abc import Callable, Iterable, Iterator
 
 
@@ -84,7 +86,7 @@ class BlockBusterFunction:
         self.activated = False
 
     def activate(self) -> None:
-        """Wrap the function."""
+        """Activate the blocking detection."""
         if self.activated:
             return
         self.activated = True
@@ -97,7 +99,7 @@ class BlockBusterFunction:
             setattr(self.module, self.func_name, checker)
 
     def deactivate(self) -> None:
-        """Unwrap the function."""
+        """Deactivate the blocking detection."""
         if not self.activated:
             return
         self.activated = False
@@ -226,6 +228,36 @@ def _get_sqlite_wrapped_functions() -> dict[str, BlockBusterFunction]:
     }
 
 
+def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
+    def lock_acquire_exclude(
+        lock: threading.Lock,
+        blocking: bool = True,  # noqa: FBT001, FBT002
+        timeout: int = -1,
+    ) -> bool:
+        return not blocking or timeout == 0 or not lock.locked()
+
+    return {
+        "threading.Lock.acquire": BlockBusterFunction(
+            _thread.LockType,
+            "acquire",
+            is_immutable=True,
+            can_block_predicate=lock_acquire_exclude,
+            can_block_functions=[
+                ("concurrent/futures/thread.py", {"_adjust_thread_count"})
+            ],
+        ),
+        "threading.Lock.acquire_lock": BlockBusterFunction(
+            _thread.LockType,
+            "acquire_lock",
+            is_immutable=True,
+            can_block_predicate=lock_acquire_exclude,
+            can_block_functions=[
+                ("concurrent/futures/thread.py", {"_adjust_thread_count"})
+            ],
+        ),
+    }
+
+
 class BlockBuster:
     """BlockBuster class."""
 
@@ -238,15 +270,16 @@ class BlockBuster:
             | _get_socket_wrapped_functions()
             | _get_ssl_wrapped_functions()
             | _get_sqlite_wrapped_functions()
+            | _get_lock_wrapped_functions()
         )
 
     def activate(self) -> None:
-        """Wrap all functions."""
+        """Activate all the functions."""
         for wrapped_function in self.functions.values():
             wrapped_function.activate()
 
     def deactivate(self) -> None:
-        """Unwrap all wrapped functions."""
+        """Deactivate all the functions."""
         for wrapped_function in self.functions.values():
             wrapped_function.deactivate()
 
