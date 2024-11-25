@@ -7,7 +7,7 @@ keywords = ["async", "block", "detect", "event loop", "asyncio"]
 authors = [
     { name = "Christophe Bornet", email = "bornet.chris@gmail.com" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 dependencies = [
     "forbiddenfruit>=0.1.4",
 ]
