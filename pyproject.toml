@@ -1,6 +1,6 @@
 [project]
 name = "blockbuster"
-version = "1.2.1"
+version = "1.3.0"
 description = "Utility to detect blocking calls in the async event loop"
 readme = "README.md"
 keywords = ["async", "block", "detect", "event loop", "asyncio"]
@@ -50,10 +50,9 @@ ignore = [
     "ISC001", # Messes with the formatter
     "PERF203", # Rarely useful
     "PLR09", # Too many something (arg, statements, etc)
-
-    # Rules that are TODOs
-    "ANN",
 ]
+flake8-annotations.allow-star-arg-any = true
+flake8-annotations.mypy-init-return = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = [

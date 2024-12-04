@@ -13,13 +13,14 @@ import ssl
 import sys
 import time
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import forbiddenfruit
 
 if TYPE_CHECKING:
     import threading
     from collections.abc import Callable, Iterable, Iterator
+    from types import ModuleType
 
 
 class BlockingError(Exception):
@@ -36,14 +37,17 @@ def _blocking_error(func: Callable[..., Any]) -> BlockingError:
     return BlockingError(msg)
 
 
+_T = TypeVar("_T")
+
+
 def _wrap_blocking(
-    func: Callable[..., Any],
+    func: Callable[..., _T],
     can_block_functions: list[tuple[str, Iterable[str]]],
     can_block_predicate: Callable[..., bool],
-) -> Callable[..., Any]:
+) -> Callable[..., _T]:
     """Wrap blocking function."""
 
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: Any, **kwargs: Any) -> _T:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -67,12 +71,12 @@ class BlockBusterFunction:
 
     def __init__(
         self,
-        module: Any,
+        module: ModuleType | type,
         func_name: str,
         *,
         can_block_functions: list[tuple[str, Iterable[str]]] | None = None,
         can_block_predicate: Callable[..., bool] = lambda *_, **__: False,
-    ):
+    ) -> None:
         """Initialize BlockBusterFunction."""
         self.module = module
         self.func_name = func_name
