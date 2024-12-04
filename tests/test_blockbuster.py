@@ -6,6 +6,7 @@ import os
 import re
 import socket
 import sqlite3
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -152,6 +153,11 @@ async def test_file_write_bytes() -> None:
             f.write(b"foo")
 
 
+async def test_write_std() -> None:
+    sys.stdout.write("test")
+    sys.stderr.write("test")
+
+
 async def test_sqlite_connnection_execute() -> None:
     with (
         contextlib.closing(sqlite3.connect(":memory:")) as connection,
@@ -212,3 +218,7 @@ async def test_cleanup(blockbuster: BlockBuster) -> None:
     blockbuster.deactivate()
     with Path("/dev/null").open(mode="wb") as f:  # noqa: ASYNC230
         f.write(b"foo")
+
+
+async def test_aiofile_import() -> None:
+    import aiofile  # noqa: F401
