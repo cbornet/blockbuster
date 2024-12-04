@@ -70,7 +70,6 @@ class BlockBusterFunction:
         module: Any,
         func_name: str,
         *,
-        is_immutable: bool = False,
         can_block_functions: list[tuple[str, Iterable[str]]] | None = None,
         can_block_predicate: Callable[..., bool] = lambda *_, **__: False,
     ):
@@ -78,7 +77,6 @@ class BlockBusterFunction:
         self.module = module
         self.func_name = func_name
         self.original_func = getattr(module, func_name)
-        self.is_immutable = is_immutable
         self.can_block_functions: list[tuple[str, Iterable[str]]] = (
             can_block_functions or []
         )
@@ -93,20 +91,20 @@ class BlockBusterFunction:
         checker = _wrap_blocking(
             self.original_func, self.can_block_functions, self.can_block_predicate
         )
-        if self.is_immutable:
-            forbiddenfruit.curse(self.module, self.func_name, checker)
-        else:
+        try:
             setattr(self.module, self.func_name, checker)
+        except TypeError:
+            forbiddenfruit.curse(self.module, self.func_name, checker)
 
     def deactivate(self) -> None:
         """Deactivate the blocking detection."""
         if not self.activated:
             return
         self.activated = False
-        if self.is_immutable:
-            forbiddenfruit.curse(self.module, self.func_name, self.original_func)
-        else:
+        try:
             setattr(self.module, self.func_name, self.original_func)
+        except TypeError:
+            forbiddenfruit.curse(self.module, self.func_name, self.original_func)
 
 
 def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
@@ -140,35 +138,32 @@ def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "io.BufferedReader.read": BlockBusterFunction(
             io.BufferedReader,
             "read",
-            is_immutable=True,
             can_block_functions=[
                 ("<frozen importlib._bootstrap_external>", {"get_data"}),
                 ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
+                ("aiofile/version.py", {"<module>"}),
             ],
         ),
         "io.BufferedWriter.write": BlockBusterFunction(
             io.BufferedWriter,
             "write",
-            is_immutable=True,
             can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
             can_block_predicate=file_write_exclude,
         ),
-        "io.BufferedRandom.read": BlockBusterFunction(
-            io.BufferedRandom, "read", is_immutable=True
-        ),
+        "io.BufferedRandom.read": BlockBusterFunction(io.BufferedRandom, "read"),
         "io.BufferedRandom.write": BlockBusterFunction(
             io.BufferedRandom,
             "write",
-            is_immutable=True,
             can_block_predicate=file_write_exclude,
         ),
         "io.TextIOWrapper.read": BlockBusterFunction(
-            io.TextIOWrapper, "read", is_immutable=True
+            io.TextIOWrapper,
+            "read",
+            can_block_functions=[("aiofile/version.py", {"<module>"})],
         ),
         "io.TextIOWrapper.write": BlockBusterFunction(
             io.TextIOWrapper,
             "write",
-            is_immutable=True,
             can_block_predicate=file_write_exclude,
         ),
     }
@@ -209,9 +204,7 @@ def _get_ssl_wrapped_functions() -> dict[str, BlockBusterFunction]:
 
 def _get_sqlite_wrapped_functions() -> dict[str, BlockBusterFunction]:
     return {
-        f"sqlite3.Cursor.{method}": BlockBusterFunction(
-            sqlite3.Cursor, method, is_immutable=True
-        )
+        f"sqlite3.Cursor.{method}": BlockBusterFunction(sqlite3.Cursor, method)
         for method in (
             "execute",
             "executemany",
@@ -221,9 +214,7 @@ def _get_sqlite_wrapped_functions() -> dict[str, BlockBusterFunction]:
             "fetchall",
         )
     } | {
-        f"sqlite3.Connection.{method}": BlockBusterFunction(
-            sqlite3.Connection, method, is_immutable=True
-        )
+        f"sqlite3.Connection.{method}": BlockBusterFunction(sqlite3.Connection, method)
         for method in ("execute", "executemany", "executescript", "commit", "rollback")
     }
 
@@ -240,7 +231,6 @@ def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "threading.Lock.acquire": BlockBusterFunction(
             _thread.LockType,
             "acquire",
-            is_immutable=True,
             can_block_predicate=lock_acquire_exclude,
             can_block_functions=[
                 ("concurrent/futures/thread.py", {"_adjust_thread_count"})
@@ -249,7 +239,6 @@ def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "threading.Lock.acquire_lock": BlockBusterFunction(
             _thread.LockType,
             "acquire_lock",
-            is_immutable=True,
             can_block_predicate=lock_acquire_exclude,
             can_block_functions=[
                 ("concurrent/futures/thread.py", {"_adjust_thread_count"})
