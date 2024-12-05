@@ -236,17 +236,13 @@ def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
             _thread.LockType,
             "acquire",
             can_block_predicate=lock_acquire_exclude,
-            can_block_functions=[
-                ("concurrent/futures/thread.py", {"_adjust_thread_count"})
-            ],
+            can_block_functions=[("threading.py", {"start"})],
         ),
         "threading.Lock.acquire_lock": BlockBusterFunction(
             _thread.LockType,
             "acquire_lock",
             can_block_predicate=lock_acquire_exclude,
-            can_block_functions=[
-                ("concurrent/futures/thread.py", {"_adjust_thread_count"})
-            ],
+            can_block_functions=[("threading.py", {"start"})],
         ),
     }
 
