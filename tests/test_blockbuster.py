@@ -194,8 +194,10 @@ async def test_lock_non_blocking() -> None:
     assert lock.acquire(blocking=False) is False
 
 
-async def test_run_in_executor() -> None:
-    await asyncio.to_thread(time.sleep, 0.1)
+async def test_thread_start() -> None:
+    t = threading.Thread(target=lambda: None)
+    t.start()
+    t.join()
 
 
 async def test_import_module() -> None:
