@@ -52,13 +52,17 @@ def _wrap_blocking(
             asyncio.get_running_loop()
         except RuntimeError:
             return func(*args, **kwargs)
-        for filename, functions in can_block_functions:
-            for frame_info in inspect.stack():
-                if (
-                    frame_info.filename.endswith(filename)
-                    and frame_info.function in functions
-                ):
-                    return func(*args, **kwargs)
+        if can_block_functions:
+            frame = inspect.currentframe()
+            while frame:
+                frame_info = inspect.getframeinfo(frame)
+                for filename, functions in can_block_functions:
+                    if (
+                        frame_info.filename.endswith(filename)
+                        and frame_info.function in functions
+                    ):
+                        return func(*args, **kwargs)
+                frame = frame.f_back
         if can_block_predicate(*args, **kwargs):
             return func(*args, **kwargs)
         raise _blocking_error(func)
