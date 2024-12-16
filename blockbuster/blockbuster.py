@@ -14,6 +14,7 @@ import ssl
 import sys
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import forbiddenfruit
@@ -40,6 +41,8 @@ def _blocking_error(func: Callable[..., Any]) -> BlockingError:
 
 _T = TypeVar("_T")
 
+blockbuster_skip: ContextVar[bool] = ContextVar("blockbuster_skip")
+
 
 def _wrap_blocking(
     func: Callable[..., _T],
@@ -49,24 +52,30 @@ def _wrap_blocking(
     """Wrap blocking function."""
 
     def wrapper(*args: Any, **kwargs: Any) -> _T:
+        if blockbuster_skip.get(False):
+            return func(*args, **kwargs)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             return func(*args, **kwargs)
-        if can_block_functions:
-            frame = inspect.currentframe()
-            while frame:
-                frame_info = inspect.getframeinfo(frame)
-                for filename, functions in can_block_functions:
-                    if (
-                        frame_info.filename.endswith(filename)
-                        and frame_info.function in functions
-                    ):
-                        return func(*args, **kwargs)
-                frame = frame.f_back
-        if can_block_predicate(*args, **kwargs):
-            return func(*args, **kwargs)
-        raise _blocking_error(func)
+        skip_token = blockbuster_skip.set(True)
+        try:
+            if can_block_functions:
+                frame = inspect.currentframe()
+                while frame:
+                    frame_info = inspect.getframeinfo(frame)
+                    for filename, functions in can_block_functions:
+                        if (
+                            frame_info.filename.endswith(filename)
+                            and frame_info.function in functions
+                        ):
+                            return func(*args, **kwargs)
+                    frame = frame.f_back
+            if can_block_predicate(*args, **kwargs):
+                return func(*args, **kwargs)
+            raise _blocking_error(func)
+        finally:
+            blockbuster_skip.reset(skip_token)
 
     return wrapper
 
@@ -133,8 +142,7 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
     functions = {
         f"os.{method}": BlockBusterFunction(os, method)
         for method in (
-            # "stat",
-            # "getcwd",
+            "getcwd",
             "statvfs",
             "sendfile",
             "rename",
@@ -151,6 +159,12 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
             "access",
         )
     }
+
+    functions["os.stat"] = BlockBusterFunction(
+        os,
+        "stat",
+        can_block_functions=[("<frozen importlib._bootstrap>", {"_find_and_load"})],
+    )
 
     def os_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return not os.get_blocking(fd)
@@ -173,7 +187,6 @@ def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
             can_block_functions=[
                 ("<frozen importlib._bootstrap_external>", {"get_data"}),
                 ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
-                ("aiofile/version.py", {"<module>"}),
             ],
         ),
         "io.BufferedWriter.write": BlockBusterFunction(

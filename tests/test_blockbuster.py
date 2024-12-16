@@ -81,6 +81,7 @@ async def test_socket_send_non_blocking() -> None:
 
 async def test_ssl_socket(blockbuster: BlockBuster) -> None:
     blockbuster.functions["socket.socket.connect"].deactivate()
+    blockbuster.functions["os.stat"].deactivate()
     with pytest.raises(BlockingError, match="ssl.SSLSocket.send"):
         requests.get("https://google.com", timeout=10)  # noqa: ASYNC210
 
@@ -196,10 +197,6 @@ async def test_cleanup(blockbuster: BlockBuster) -> None:
         f.write(b"foo")
 
 
-async def test_aiofile_import() -> None:
-    import aiofile  # noqa: F401
-
-
 async def test_os_read() -> None:
     fd = os.open("/dev/null", os.O_RDONLY)
     with pytest.raises(
@@ -226,7 +223,21 @@ async def test_os_write_non_blocking() -> None:
     os.write(fd, b"foo")
 
 
-@pytest.mark.skipif(hasattr(os, "statvfs"), reason="statvfs is not available")
+async def test_os_stat() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("stat (<module 'posix' (built-in)>")
+    ):
+        Path("/").stat()
+
+
+async def test_os_getcwd() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("getcwd (<module 'posix' (built-in)>")
+    ):
+        Path.cwd()
+
+
+@pytest.mark.skipif(not hasattr(os, "statvfs"), reason="statvfs is not available")
 async def test_os_statvfs() -> None:
     with pytest.raises(
         BlockingError, match=re.escape("statvfs (<module 'posix' (built-in)>")
@@ -234,7 +245,7 @@ async def test_os_statvfs() -> None:
         os.statvfs("/")
 
 
-@pytest.mark.skipif(hasattr(os, "sendfile"), reason="sendfile is not available")
+@pytest.mark.skipif(not hasattr(os, "sendfile"), reason="sendfile is not available")
 async def test_os_sendfile() -> None:
     with pytest.raises(
         BlockingError, match=re.escape("sendfile (<module 'posix' (built-in)>")
@@ -251,7 +262,7 @@ async def test_os_rename() -> None:
 
 async def test_os_renames() -> None:
     with pytest.raises(
-        BlockingError, match=re.escape("rename (<module 'posix' (built-in)>")
+        BlockingError, match=re.escape("stat (<module 'posix' (built-in)>")
     ):
         os.renames("/1", "/2")
 
@@ -279,7 +290,7 @@ async def test_os_mkdir() -> None:
 
 async def test_os_makedirs() -> None:
     with pytest.raises(
-        BlockingError, match=re.escape("mkdir (<module 'posix' (built-in)>")
+        BlockingError, match=re.escape("stat (<module 'posix' (built-in)>")
     ):
         os.makedirs("/1")  # noqa: PTH103
 
