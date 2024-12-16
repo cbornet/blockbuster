@@ -31,32 +31,6 @@ async def test_time_sleep() -> None:
         time.sleep(1)  # noqa: ASYNC251
 
 
-async def test_os_read() -> None:
-    fd = os.open("/dev/null", os.O_RDONLY)
-    with pytest.raises(
-        BlockingError, match=re.escape("read (<module 'posix' (built-in)>")
-    ):
-        os.read(fd, 1)
-
-
-async def test_os_read_non_blocking() -> None:
-    fd = os.open("/dev/null", os.O_NONBLOCK | os.O_RDONLY)
-    os.read(fd, 1)
-
-
-async def test_os_write() -> None:
-    fd = os.open("/dev/null", os.O_RDWR)
-    with pytest.raises(
-        BlockingError, match=re.escape("write (<module 'posix' (built-in)>")
-    ):
-        os.write(fd, b"foo")
-
-
-async def test_os_write_non_blocking() -> None:
-    fd = os.open("/dev/null", os.O_NONBLOCK | os.O_RDWR)
-    os.write(fd, b"foo")
-
-
 PORT = 65432
 
 
@@ -224,3 +198,141 @@ async def test_cleanup(blockbuster: BlockBuster) -> None:
 
 async def test_aiofile_import() -> None:
     import aiofile  # noqa: F401
+
+
+async def test_os_read() -> None:
+    fd = os.open("/dev/null", os.O_RDONLY)
+    with pytest.raises(
+        BlockingError, match=re.escape("read (<module 'posix' (built-in)>")
+    ):
+        os.read(fd, 1)
+
+
+async def test_os_read_non_blocking() -> None:
+    fd = os.open("/dev/null", os.O_NONBLOCK | os.O_RDONLY)
+    os.read(fd, 1)
+
+
+async def test_os_write() -> None:
+    fd = os.open("/dev/null", os.O_RDWR)
+    with pytest.raises(
+        BlockingError, match=re.escape("write (<module 'posix' (built-in)>")
+    ):
+        os.write(fd, b"foo")
+
+
+async def test_os_write_non_blocking() -> None:
+    fd = os.open("/dev/null", os.O_NONBLOCK | os.O_RDWR)
+    os.write(fd, b"foo")
+
+
+async def test_os_statvfs() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("statvfs (<module 'posix' (built-in)>")
+    ):
+        os.statvfs("/")
+
+
+async def test_os_sendfile() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("sendfile (<module 'posix' (built-in)>")
+    ):
+        os.sendfile(0, 1, 0, 1)
+
+
+async def test_os_rename() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("rename (<module 'posix' (built-in)>")
+    ):
+        Path("/1").rename("/2")
+
+
+async def test_os_renames() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("rename (<module 'posix' (built-in)>")
+    ):
+        os.renames("/1", "/2")
+
+
+async def test_os_replace() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("replace (<module 'posix' (built-in)>")
+    ):
+        Path("/1").replace("/2")
+
+
+async def test_os_unlink() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("unlink (<module 'posix' (built-in)>")
+    ):
+        Path("/1").unlink()
+
+
+async def test_os_mkdir() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("mkdir (<module 'posix' (built-in)>")
+    ):
+        Path("/1").mkdir()
+
+
+async def test_os_makedirs() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("mkdir (<module 'posix' (built-in)>")
+    ):
+        os.makedirs("/1")  # noqa: PTH103
+
+
+async def test_os_rmdir() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("rmdir (<module 'posix' (built-in)>")
+    ):
+        Path("/1").rmdir()
+
+
+async def test_os_removedirs() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("rmdir (<module 'posix' (built-in)>")
+    ):
+        os.removedirs("/1")
+
+
+async def test_os_link() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("link (<module 'posix' (built-in)>")
+    ):
+        os.link("/1", "/2")
+
+
+async def test_os_symlink() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("symlink (<module 'posix' (built-in)>")
+    ):
+        os.symlink("/1", "/2")
+
+
+async def test_os_readlink() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("readlink (<module 'posix' (built-in)>")
+    ):
+        os.readlink("/1")
+
+
+async def test_os_listdir() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("listdir (<module 'posix' (built-in)>")
+    ):
+        os.listdir("/1")
+
+
+async def test_os_scandir() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("scandir (<module 'posix' (built-in)>")
+    ):
+        os.scandir("/1")
+
+
+async def test_os_access() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("access (<module 'posix' (built-in)>")
+    ):
+        os.access("/1", os.F_OK)

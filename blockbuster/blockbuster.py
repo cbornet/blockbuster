@@ -129,13 +129,36 @@ def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
 
 
 def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
+    functions = {
+        f"os.{method}": BlockBusterFunction(os, method)
+        for method in (
+            # "stat",
+            # "getcwd",
+            "statvfs",
+            "sendfile",
+            "rename",
+            "replace",
+            "remove",
+            "unlink",
+            "mkdir",
+            "rmdir",
+            "link",
+            "symlink",
+            "readlink",
+            "listdir",
+            "scandir",
+            "access",
+        )
+    }
+
     def os_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return not os.get_blocking(fd)
 
-    return {
+    functions |= {
         "os.read": BlockBusterFunction(os, "read", can_block_predicate=os_exclude),
         "os.write": BlockBusterFunction(os, "write", can_block_predicate=os_exclude),
     }
+    return functions
 
 
 def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
