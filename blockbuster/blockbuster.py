@@ -85,7 +85,7 @@ class BlockBusterFunction:
         """Initialize BlockBusterFunction."""
         self.module = module
         self.func_name = func_name
-        self.original_func = getattr(module, func_name)
+        self.original_func = getattr(module, func_name, None)
         self.can_block_functions: list[tuple[str, Iterable[str]]] = (
             can_block_functions or []
         )
@@ -94,7 +94,7 @@ class BlockBusterFunction:
 
     def activate(self) -> None:
         """Activate the blocking detection."""
-        if self.activated:
+        if self.original_func is None or self.activated:
             return
         self.activated = True
         checker = _wrap_blocking(
@@ -107,7 +107,7 @@ class BlockBusterFunction:
 
     def deactivate(self) -> None:
         """Deactivate the blocking detection."""
-        if not self.activated:
+        if self.original_func is None or not self.activated:
             return
         self.activated = False
         try:
