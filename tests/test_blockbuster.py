@@ -226,6 +226,7 @@ async def test_os_write_non_blocking() -> None:
     os.write(fd, b"foo")
 
 
+@pytest.mark.skipif(hasattr(os, "statvfs"), reason="statvfs is not available")
 async def test_os_statvfs() -> None:
     with pytest.raises(
         BlockingError, match=re.escape("statvfs (<module 'posix' (built-in)>")
@@ -233,6 +234,7 @@ async def test_os_statvfs() -> None:
         os.statvfs("/")
 
 
+@pytest.mark.skipif(hasattr(os, "sendfile"), reason="sendfile is not available")
 async def test_os_sendfile() -> None:
     with pytest.raises(
         BlockingError, match=re.escape("sendfile (<module 'posix' (built-in)>")
