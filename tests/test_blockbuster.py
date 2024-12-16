@@ -336,3 +336,10 @@ async def test_os_access() -> None:
         BlockingError, match=re.escape("access (<module 'posix' (built-in)>")
     ):
         os.access("/1", os.F_OK)
+
+
+async def test_builtins_input() -> None:
+    with pytest.raises(
+        BlockingError, match=re.escape("input (<module 'builtins' (built-in)>")
+    ):
+        input()

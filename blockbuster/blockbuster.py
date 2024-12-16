@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import _thread
 import asyncio
+import builtins
 import inspect
 import io
 import os
@@ -274,6 +275,10 @@ def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
     }
 
 
+def _get_builtins_wrapped_functions() -> dict[str, BlockBusterFunction]:
+    return {"builtins.input": BlockBusterFunction(builtins, "input")}
+
+
 class BlockBuster:
     """BlockBuster class."""
 
@@ -287,6 +292,7 @@ class BlockBuster:
             | _get_ssl_wrapped_functions()
             | _get_sqlite_wrapped_functions()
             | _get_lock_wrapped_functions()
+            | _get_builtins_wrapped_functions()
         )
 
     def activate(self) -> None:
