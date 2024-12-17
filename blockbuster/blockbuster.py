@@ -166,12 +166,23 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         can_block_functions=[("<frozen importlib._bootstrap>", {"_find_and_load"})],
     )
 
-    def os_exclude(fd: int, *_: Any, **__: Any) -> bool:
+    functions |= {
+        f"os.path.{method}": BlockBusterFunction(os.path, method)
+        for method in (
+            "islink",
+            "ismount",
+            "samestat",
+            "sameopenfile",
+            "abspath",
+        )
+    }
+
+    def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return not os.get_blocking(fd)
 
     functions |= {
-        "os.read": BlockBusterFunction(os, "read", can_block_predicate=os_exclude),
-        "os.write": BlockBusterFunction(os, "write", can_block_predicate=os_exclude),
+        "os.read": BlockBusterFunction(os, "read", can_block_predicate=os_rw_exclude),
+        "os.write": BlockBusterFunction(os, "write", can_block_predicate=os_rw_exclude),
     }
     return functions
 
