@@ -178,7 +178,7 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
 
 def _get_io_wrapped_functions() -> dict[str, BlockBusterFunction]:
     def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
-        return file in {sys.stdout, sys.stderr}
+        return file in {sys.stdout, sys.stderr} or file.isatty()
 
     return {
         "io.BufferedReader.read": BlockBusterFunction(
