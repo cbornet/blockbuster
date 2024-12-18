@@ -213,6 +213,7 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "abspath",
         can_block_functions=[
             ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
+            ("coverage/control.py", {"_should_trace"}),
         ],
     )
 
