@@ -383,3 +383,11 @@ async def test_builtins_input() -> None:
         BlockingError, match=re.escape("input (<module 'builtins' (built-in)>")
     ):
         input()
+
+
+def test_can_block_in_builder(blockbuster: BlockBuster) -> None:
+    blockbuster.functions["os.stat"].can_block_in("foo.py", {"bar"}).can_block_in(
+        "baz.py", "qux"
+    )
+    assert ("foo.py", {"bar"}) in blockbuster.functions["os.stat"].can_block_functions
+    assert ("baz.py", {"qux"}) in blockbuster.functions["os.stat"].can_block_functions

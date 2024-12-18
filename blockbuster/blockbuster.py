@@ -101,10 +101,10 @@ class BlockBusterFunction:
         self.can_block_predicate: Callable[..., bool] = can_block_predicate
         self.activated = False
 
-    def activate(self) -> None:
+    def activate(self) -> BlockBusterFunction:
         """Activate the blocking detection."""
         if self.original_func is None or self.activated:
-            return
+            return self
         self.activated = True
         checker = _wrap_blocking(
             self.original_func, self.can_block_functions, self.can_block_predicate
@@ -113,16 +113,33 @@ class BlockBusterFunction:
             setattr(self.module, self.func_name, checker)
         except TypeError:
             forbiddenfruit.curse(self.module, self.func_name, checker)
+        return self
 
-    def deactivate(self) -> None:
+    def deactivate(self) -> BlockBusterFunction:
         """Deactivate the blocking detection."""
         if self.original_func is None or not self.activated:
-            return
+            return self
         self.activated = False
         try:
             setattr(self.module, self.func_name, self.original_func)
         except TypeError:
             forbiddenfruit.curse(self.module, self.func_name, self.original_func)
+        return self
+
+    def can_block_in(
+        self, filename: str, functions: str | Iterable[str]
+    ) -> BlockBusterFunction:
+        """Add functions where it is allowed to block.
+
+        Args:
+            filename (str): The filename that contains the functions.
+            functions (str | Iterable[str]): The functions where blocking is allowed.
+
+        """
+        if isinstance(functions, str):
+            functions = {functions}
+        self.can_block_functions.append((filename, functions))
+        return self
 
 
 def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
@@ -146,7 +163,6 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
             "statvfs",
             "sendfile",
             "rename",
-            "replace",
             "remove",
             "unlink",
             "mkdir",
@@ -163,7 +179,23 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
     functions["os.stat"] = BlockBusterFunction(
         os,
         "stat",
-        can_block_functions=[("<frozen importlib._bootstrap>", {"_find_and_load"})],
+        can_block_functions=[
+            ("<frozen importlib._bootstrap>", {"_find_and_load"}),
+            ("linecache.py", {"checkcache", "updatecache"}),
+            ("coverage/control.py", {"_should_trace"}),
+        ],
+    )
+
+    functions["os.mkdir"] = BlockBusterFunction(
+        os,
+        "mkdir",
+        can_block_functions=[("_pytest/assertion/rewrite.py", {"try_makedirs"})],
+    )
+
+    functions["os.replace"] = BlockBusterFunction(
+        os,
+        "replace",
+        can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
     )
 
     functions |= {
@@ -173,9 +205,16 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
             "ismount",
             "samestat",
             "sameopenfile",
-            "abspath",
         )
     }
+
+    functions["os.path.abspath"] = BlockBusterFunction(
+        os.path,
+        "abspath",
+        can_block_functions=[
+            ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
+        ],
+    )
 
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return not os.get_blocking(fd)
