@@ -237,7 +237,7 @@ async def test_os_stat() -> None:
 
 async def test_os_getcwd() -> None:
     with pytest.raises(BlockingError, match=r"getcwd \(<module '.*' \(built-in\)>\)"):
-        Path.cwd()
+        os.getcwd()
 
 
 @pytest.mark.skipif(not hasattr(os, "statvfs"), reason="statvfs is not available")
