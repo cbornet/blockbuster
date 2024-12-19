@@ -198,15 +198,13 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
     )
 
-    functions |= {
-        f"os.path.{method}": BlockBusterFunction(os.path, method)
-        for method in (
-            "islink",
-            "ismount",
-            "samestat",
-            "sameopenfile",
-        )
-    }
+    for method in (
+        "islink",
+        "ismount",
+        "samestat",
+        "sameopenfile",
+    ):
+        functions[f"os.path.{method}"] = BlockBusterFunction(os.path, method)
 
     functions["os.path.abspath"] = BlockBusterFunction(
         os.path,
@@ -220,10 +218,13 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return not os.get_blocking(fd)
 
-    functions |= {
-        "os.read": BlockBusterFunction(os, "read", can_block_predicate=os_rw_exclude),
-        "os.write": BlockBusterFunction(os, "write", can_block_predicate=os_rw_exclude),
-    }
+    functions["os.read"] = BlockBusterFunction(
+        os, "read", can_block_predicate=os_rw_exclude
+    )
+    functions["os.write"] = BlockBusterFunction(
+        os, "write", can_block_predicate=os_rw_exclude
+    )
+
     return functions
 
 
@@ -299,7 +300,7 @@ def _get_ssl_wrapped_functions() -> dict[str, BlockBusterFunction]:
 
 
 def _get_sqlite_wrapped_functions() -> dict[str, BlockBusterFunction]:
-    return {
+    functions = {
         f"sqlite3.Cursor.{method}": BlockBusterFunction(sqlite3.Cursor, method)
         for method in (
             "execute",
@@ -309,10 +310,14 @@ def _get_sqlite_wrapped_functions() -> dict[str, BlockBusterFunction]:
             "fetchmany",
             "fetchall",
         )
-    } | {
-        f"sqlite3.Connection.{method}": BlockBusterFunction(sqlite3.Connection, method)
-        for method in ("execute", "executemany", "executescript", "commit", "rollback")
     }
+
+    for method in ("execute", "executemany", "executescript", "commit", "rollback"):
+        functions[f"sqlite3.Connection.{method}"] = BlockBusterFunction(
+            sqlite3.Connection, method
+        )
+
+    return functions
 
 
 def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
@@ -348,16 +353,16 @@ class BlockBuster:
 
     def __init__(self) -> None:
         """Initialize BlockBuster."""
-        self.functions = (
-            _get_time_wrapped_functions()
-            | _get_os_wrapped_functions()
-            | _get_io_wrapped_functions()
-            | _get_socket_wrapped_functions()
-            | _get_ssl_wrapped_functions()
-            | _get_sqlite_wrapped_functions()
-            | _get_lock_wrapped_functions()
-            | _get_builtins_wrapped_functions()
-        )
+        self.functions = {
+            **_get_time_wrapped_functions(),
+            **_get_os_wrapped_functions(),
+            **_get_io_wrapped_functions(),
+            **_get_socket_wrapped_functions(),
+            **_get_ssl_wrapped_functions(),
+            **_get_sqlite_wrapped_functions(),
+            **_get_lock_wrapped_functions(),
+            **_get_builtins_wrapped_functions(),
+        }
 
     def activate(self) -> None:
         """Activate all the functions."""
