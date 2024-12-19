@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+import contextvars
+import functools
 import importlib
 import io
 import os
@@ -9,13 +11,23 @@ import sqlite3
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from asyncio import events
 from pathlib import Path
+from typing import Any, Callable, Iterator, TypeVar
 
 import pytest
 import requests
 
 from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
+
+_T = TypeVar("_T")
+
+
+async def to_thread(func: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
+    loop = events.get_running_loop()
+    ctx = contextvars.copy_context()
+    func_call = functools.partial(ctx.run, func, *args, **kwargs)
+    return await loop.run_in_executor(None, func_call)
 
 
 @pytest.fixture(autouse=True)
@@ -46,20 +58,19 @@ def tcp_server() -> None:
 
 
 async def test_socket_connect() -> None:
-    with (
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s,
-        pytest.raises(BlockingError, match="method 'connect' of '_socket.socket'"),
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s, pytest.raises(
+        BlockingError, match="method 'connect' of '_socket.socket'"
     ):
         s.connect(("127.0.0.1", PORT))
 
 
 async def test_socket_send() -> None:
-    tcp_server_task = asyncio.create_task(asyncio.to_thread(tcp_server))
+    tcp_server_task = asyncio.create_task(to_thread(tcp_server))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         while True:
             with contextlib.suppress(ConnectionRefusedError):
                 await asyncio.sleep(0.1)
-                await asyncio.to_thread(s.connect, ("127.0.0.1", PORT))
+                await to_thread(s.connect, ("127.0.0.1", PORT))
                 break
         with pytest.raises(BlockingError, match="method 'send' of '_socket.socket'"):
             s.send(b"Hello, world")
@@ -67,12 +78,12 @@ async def test_socket_send() -> None:
 
 
 async def test_socket_send_non_blocking() -> None:
-    tcp_server_task = asyncio.create_task(asyncio.to_thread(tcp_server))
+    tcp_server_task = asyncio.create_task(to_thread(tcp_server))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         while True:
             with contextlib.suppress(ConnectionRefusedError):
                 await asyncio.sleep(0.1)
-                await asyncio.to_thread(s.connect, ("127.0.0.1", PORT))
+                await to_thread(s.connect, ("127.0.0.1", PORT))
                 break
         blocking = False
         s.setblocking(blocking)
@@ -135,18 +146,17 @@ async def test_write_std() -> None:
 
 
 async def test_sqlite_connnection_execute() -> None:
-    with (
-        contextlib.closing(sqlite3.connect(":memory:")) as connection,
-        pytest.raises(BlockingError, match="method 'execute' of 'sqlite3.Connection'"),
+    with contextlib.closing(sqlite3.connect(":memory:")) as connection, pytest.raises(
+        BlockingError, match="method 'execute' of 'sqlite3.Connection'"
     ):
         connection.execute("SELECT 1")
 
 
 async def test_sqlite_cursor_execute() -> None:
-    with (
-        contextlib.closing(sqlite3.connect(":memory:")) as connection,
-        contextlib.closing(connection.cursor()) as cursor,
-        pytest.raises(BlockingError, match="method 'execute' of 'sqlite3.Cursor'"),
+    with contextlib.closing(
+        sqlite3.connect(":memory:")
+    ) as connection, contextlib.closing(connection.cursor()) as cursor, pytest.raises(
+        BlockingError, match="method 'execute' of 'sqlite3.Cursor'"
     ):
         cursor.execute("SELECT 1")
 
@@ -222,7 +232,7 @@ async def test_os_write_non_blocking() -> None:
 
 async def test_os_stat() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        Path("/").stat()
+        os.stat("/1")
 
 
 async def test_os_getcwd() -> None:
@@ -244,7 +254,7 @@ async def test_os_sendfile() -> None:
 
 async def test_os_rename() -> None:
     with pytest.raises(BlockingError, match=r"rename \(<module '.*' \(built-in\)>\)"):
-        Path("/1").rename("/2")
+        os.rename("/1", "/2")
 
 
 async def test_os_renames() -> None:
@@ -254,27 +264,27 @@ async def test_os_renames() -> None:
 
 async def test_os_replace() -> None:
     with pytest.raises(BlockingError, match=r"replace \(<module '.*' \(built-in\)>\)"):
-        Path("/1").replace("/2")
+        os.replace("/1", "/2")
 
 
 async def test_os_unlink() -> None:
     with pytest.raises(BlockingError, match=r"unlink \(<module '.*' \(built-in\)>\)"):
-        Path("/1").unlink()
+        os.unlink("/1")
 
 
 async def test_os_mkdir() -> None:
     with pytest.raises(BlockingError, match=r"mkdir \(<module '.*' \(built-in\)>\)"):
-        Path("/1").mkdir()
+        os.mkdir("/1")
 
 
 async def test_os_makedirs() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.makedirs("/1")  # noqa: PTH103
+        os.makedirs("/1")
 
 
 async def test_os_rmdir() -> None:
     with pytest.raises(BlockingError, match=r"rmdir \(<module '.*' \(built-in\)>\)"):
-        Path("/1").rmdir()
+        os.rmdir("/1")
 
 
 async def test_os_removedirs() -> None:
@@ -314,22 +324,22 @@ async def test_os_access() -> None:
 
 async def test_os_path_exists() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.exists("/1")  # noqa: PTH110
+        os.path.exists("/1")
 
 
 async def test_os_path_isfile() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.isfile("/1")  # noqa: PTH113
+        os.path.isfile("/1")
 
 
 async def test_os_path_isdir() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.isdir("/1")  # noqa: PTH112
+        os.path.isdir("/1")
 
 
 async def test_os_path_islink() -> None:
     with pytest.raises(BlockingError, match="path.islink"):
-        os.path.islink("/1")  # noqa: PTH114
+        os.path.islink("/1")
 
 
 async def test_os_path_ismount() -> None:
@@ -339,27 +349,27 @@ async def test_os_path_ismount() -> None:
 
 async def test_os_path_getsize() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.getsize("/1")  # noqa: PTH202
+        os.path.getsize("/1")
 
 
 async def test_os_path_getmtime() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.getmtime("/1")  # noqa: PTH204
+        os.path.getmtime("/1")
 
 
 async def test_os_path_getatime() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.getatime("/1")  # noqa: PTH203
+        os.path.getatime("/1")
 
 
 async def test_os_path_getctime() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.getctime("/1")  # noqa: PTH205
+        os.path.getctime("/1")
 
 
 async def test_os_path_samefile() -> None:
     with pytest.raises(BlockingError, match=r"stat \(<module '.*' \(built-in\)>\)"):
-        os.path.samefile("/1", "/2")  # noqa: PTH121
+        os.path.samefile("/1", "/2")
 
 
 async def test_os_path_sameopenfile() -> None:
@@ -370,12 +380,12 @@ async def test_os_path_sameopenfile() -> None:
 async def test_os_path_samestat(blockbuster: BlockBuster) -> None:
     blockbuster.functions["os.stat"].deactivate()
     with pytest.raises(BlockingError, match="path.samestat"):
-        os.path.samestat(os.stat(0), os.stat(0))  # noqa: PTH116
+        os.path.samestat(os.stat(0), os.stat(0))
 
 
 async def test_os_path_abspath() -> None:
     with pytest.raises(BlockingError, match="path.abspath"):
-        Path("/1").resolve()
+        os.path.abspath("/1")
 
 
 async def test_builtins_input() -> None:

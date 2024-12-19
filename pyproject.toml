@@ -58,6 +58,7 @@ flake8-annotations.mypy-init-return = true
 "tests/*" = [
     "D1",
     "S101",
+    "PTH",
 ]
 
 [tool.mypy]
