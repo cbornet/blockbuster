@@ -199,12 +199,19 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
     )
 
     for method in (
-        "islink",
         "ismount",
         "samestat",
         "sameopenfile",
     ):
         functions[f"os.path.{method}"] = BlockBusterFunction(os.path, method)
+
+    functions["os.path.islink"] = BlockBusterFunction(
+        os.path,
+        "islink",
+        can_block_functions=[
+            ("coverage/control.py", {"_should_trace"}),
+        ],
+    )
 
     functions["os.path.abspath"] = BlockBusterFunction(
         os.path,
