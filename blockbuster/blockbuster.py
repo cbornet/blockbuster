@@ -60,6 +60,8 @@ def _wrap_blocking(
             return func(*args, **kwargs)
         skip_token = blockbuster_skip.set(True)
         try:
+            if can_block_predicate(*args, **kwargs):
+                return func(*args, **kwargs)
             if can_block_functions:
                 frame = inspect.currentframe()
                 while frame:
@@ -71,8 +73,6 @@ def _wrap_blocking(
                         ):
                             return func(*args, **kwargs)
                     frame = frame.f_back
-            if can_block_predicate(*args, **kwargs):
-                return func(*args, **kwargs)
             raise _blocking_error(func)
         finally:
             blockbuster_skip.reset(skip_token)
