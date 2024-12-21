@@ -164,7 +164,6 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
             "rename",
             "remove",
             "unlink",
-            "mkdir",
             "rmdir",
             "link",
             "symlink",
