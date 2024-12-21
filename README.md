@@ -68,7 +68,7 @@ with blockbuster_ctx():
     # Your test code here
 ```
 
-## Usage with Pytest
+### Usage with Pytest
 
 Blockbuster is intended to be used with testing frameworks like `pytest` to catch blocking calls. 
 Here's how you can integrate Blockbuster into your `pytest` test suite:
@@ -236,7 +236,7 @@ See the [uv documentation](https://docs.astral.sh/uv/getting-started/installatio
 To install the required dependencies, run the following command:
 
 ```bash
-uv install
+uv sync
 ```
 
 ### Running Tests
