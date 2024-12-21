@@ -148,8 +148,7 @@ def _get_time_wrapped_functions() -> dict[str, BlockBusterFunction]:
             time,
             "sleep",
             can_block_functions=[
-                ("pydev/pydevd.py", {"_do_wait_suspend"}),
-                ("pydevd/pydevd.py", {"_do_wait_suspend"}),
+                ("/pydevd.py", {"_do_wait_suspend"}),
             ],
         )
     }
@@ -219,6 +218,7 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         can_block_functions=[
             ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
             ("coverage/control.py", {"_should_trace"}),
+            ("/pydevd.py", {"_do_wait_suspend"}),
         ],
     )
 
