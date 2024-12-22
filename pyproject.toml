@@ -51,6 +51,7 @@ ignore = [
     "PERF203", # Rarely useful
     "PLR09", # Too many something (arg, statements, etc)
 ]
+pydocstyle.convention = "google"
 flake8-annotations.allow-star-arg-any = true
 flake8-annotations.mypy-init-return = true
 
