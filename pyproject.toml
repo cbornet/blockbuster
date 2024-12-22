@@ -74,3 +74,7 @@ ignore_missing_imports = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["blockbuster"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
