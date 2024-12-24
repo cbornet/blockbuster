@@ -217,7 +217,7 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         can_block_functions=[
             ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
             ("coverage/control.py", {"_should_trace"}),
-            ("/pydevd.py", {"get_abs_path_real_path_and_base_from_file"}),
+            ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
         ],
     )
 
