@@ -208,6 +208,7 @@ def _get_os_wrapped_functions() -> dict[str, BlockBusterFunction]:
         "islink",
         can_block_functions=[
             ("coverage/control.py", {"_should_trace"}),
+            ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
         ],
     )
 
@@ -339,7 +340,10 @@ def _get_lock_wrapped_functions() -> dict[str, BlockBusterFunction]:
             _thread.LockType,
             "acquire",
             can_block_predicate=lock_acquire_exclude,
-            can_block_functions=[("threading.py", {"start"})],
+            can_block_functions=[
+                ("threading.py", {"start"}),
+                ("asyncio/base_events.py", {"shutdown_default_executor"}),
+            ],
         ),
         "threading.Lock.acquire_lock": BlockBusterFunction(
             _thread.LockType,
