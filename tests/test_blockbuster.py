@@ -18,7 +18,9 @@ from typing import Any, Callable, Iterator, TypeVar
 import pytest
 import requests
 
+import tests
 from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
+from tests import subpackage
 
 _T = TypeVar("_T")
 
@@ -206,6 +208,28 @@ async def test_cleanup(blockbuster: BlockBuster) -> None:
     blockbuster.deactivate()
     with Path("/dev/null").open(mode="wb") as f:  # noqa: ASYNC230
         f.write(b"foo")
+
+
+async def test_scanned_modules(blockbuster: BlockBuster) -> None:
+    blockbuster.deactivate()
+    # Multiple scanned packages
+    with blockbuster_ctx(["tests.subpackage"]):
+        # Call not from subpackage doesn't trigger BlockingError
+        with Path("/dev/null").open(mode="wb") as f:  # noqa: ASYNC230
+            f.write(b"foo")
+        # Call from subpackage triggers BlockingError
+        with pytest.raises(BlockingError):
+            subpackage.bar()
+    # Single scanned package
+    with blockbuster_ctx("tests.subpackage"), pytest.raises(BlockingError):
+        subpackage.bar()
+    # Scanned module file
+    with blockbuster_ctx(["tests.subpackage.foo"]), pytest.raises(BlockingError):
+        subpackage.bar()
+    # Scanned module object
+    with blockbuster_ctx(tests.subpackage.foo), pytest.raises(BlockingError):
+        subpackage.bar()
+    subpackage.bar()
 
 
 async def test_os_read() -> None:
