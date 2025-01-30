@@ -1,6 +1,6 @@
 [project]
 name = "blockbuster"
-version = "1.5.10"
+version = "1.5.11"
 description = "Utility to detect blocking calls in the async event loop"
 readme = "README.md"
 keywords = ["async", "block", "detect", "event loop", "asyncio"]
@@ -45,6 +45,7 @@ asyncio_mode = "auto"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
+    "C90", # Complexity
     "CPY", # Missing copyright
     "COM812", # Messes with the formatter
     "ISC001", # Messes with the formatter
