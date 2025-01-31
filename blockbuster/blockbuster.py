@@ -304,6 +304,10 @@ def _get_io_wrapped_functions(
     stderr = sys.stderr
 
     def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
+        try:
+            file.fileno()
+        except io.UnsupportedOperation:
+            return True
         return file in {stdout, stderr, sys.stdout, sys.stderr} or file.isatty()
 
     return {
