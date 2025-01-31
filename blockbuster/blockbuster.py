@@ -205,7 +205,7 @@ def _get_os_wrapped_functions(
     modules: ModulesType = None,
 ) -> dict[str, BlockBusterFunction]:
     functions = {
-        f"os.{method}": BlockBusterFunction(os, method)
+        f"os.{method}": BlockBusterFunction(os, method, scanned_modules=modules)
         for method in (
             "getcwd",
             "statvfs",
@@ -253,7 +253,9 @@ def _get_os_wrapped_functions(
         "samestat",
         "sameopenfile",
     ):
-        functions[f"os.path.{method}"] = BlockBusterFunction(os.path, method)
+        functions[f"os.path.{method}"] = BlockBusterFunction(
+            os.path, method, scanned_modules=modules
+        )
 
     functions["os.path.islink"] = BlockBusterFunction(
         os.path,
@@ -321,7 +323,9 @@ def _get_io_wrapped_functions(
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
         ),
-        "io.BufferedRandom.read": BlockBusterFunction(io.BufferedRandom, "read"),
+        "io.BufferedRandom.read": BlockBusterFunction(
+            io.BufferedRandom, "read", scanned_modules=modules
+        ),
         "io.BufferedRandom.write": BlockBusterFunction(
             io.BufferedRandom,
             "write",
