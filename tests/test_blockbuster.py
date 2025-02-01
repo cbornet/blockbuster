@@ -9,6 +9,7 @@ import re
 import socket
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 from asyncio import events
@@ -145,6 +146,13 @@ async def test_file_write_bytes() -> None:
 async def test_write_std() -> None:
     sys.stdout.write("test")
     sys.stderr.write("test")
+
+
+async def test_write_spooledtempfile() -> None:
+    with tempfile.SpooledTemporaryFile(max_size=4) as f:
+        f.write(b"foo")
+        with pytest.raises(BlockingError, match="path.abspath"):
+            f.write(b"bar")
 
 
 async def test_sqlite_connnection_execute() -> None:

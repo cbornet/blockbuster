@@ -17,6 +17,7 @@ import sys
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from tempfile import SpooledTemporaryFile
 from typing import TYPE_CHECKING, Any, List, TypeVar, Union
 
 import forbiddenfruit
@@ -304,11 +305,15 @@ def _get_io_wrapped_functions(
     stderr = sys.stderr
 
     def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
+        if isinstance(file, SpooledTemporaryFile) and not file._rolled:  # noqa: SLF001
+            return True
+        if file in {stdout, stderr, sys.stdout, sys.stderr} or file.isatty():
+            return True
         try:
             file.fileno()
         except io.UnsupportedOperation:
             return True
-        return file in {stdout, stderr, sys.stdout, sys.stderr} or file.isatty()
+        return False
 
     return {
         "io.BufferedReader.read": BlockBusterFunction(
