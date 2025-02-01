@@ -303,6 +303,13 @@ def _get_io_wrapped_functions(
     stdout = sys.stdout
     stderr = sys.stderr
 
+    def file_read_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
+        try:
+            file.fileno()
+        except io.UnsupportedOperation:
+            return not file.isatty()
+        return False
+
     def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
         if file in {stdout, stderr, sys.stdout, sys.stderr} or file.isatty():
             return True
@@ -320,6 +327,7 @@ def _get_io_wrapped_functions(
                 ("<frozen importlib._bootstrap_external>", {"get_data"}),
                 ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
             ],
+            can_block_predicate=file_read_exclude,
             scanned_modules=modules,
         ),
         "io.BufferedWriter.write": BlockBusterFunction(
@@ -330,7 +338,10 @@ def _get_io_wrapped_functions(
             scanned_modules=modules,
         ),
         "io.BufferedRandom.read": BlockBusterFunction(
-            io.BufferedRandom, "read", scanned_modules=modules
+            io.BufferedRandom,
+            "read",
+            can_block_predicate=file_read_exclude,
+            scanned_modules=modules,
         ),
         "io.BufferedRandom.write": BlockBusterFunction(
             io.BufferedRandom,
@@ -342,6 +353,7 @@ def _get_io_wrapped_functions(
             io.TextIOWrapper,
             "read",
             can_block_functions=[("aiofile/version.py", {"<module>"})],
+            can_block_predicate=file_read_exclude,
             scanned_modules=modules,
         ),
         "io.TextIOWrapper.write": BlockBusterFunction(
