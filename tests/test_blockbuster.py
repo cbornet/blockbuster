@@ -230,6 +230,12 @@ async def test_scanned_modules(blockbuster: BlockBuster) -> None:
     with blockbuster_ctx(tests.subpackage.foo), pytest.raises(BlockingError):
         subpackage.bar()
     subpackage.bar()
+    # Excluded module name
+    with blockbuster_ctx("tests.subpackage", excluded_modules=["tests.subpackage.foo"]):
+        subpackage.bar()
+    # Excluded module object
+    with blockbuster_ctx("tests.subpackage", excluded_modules=[tests.subpackage.foo]):
+        subpackage.bar()
 
 
 async def test_os_read() -> None:
