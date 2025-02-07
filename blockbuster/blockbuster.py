@@ -17,6 +17,7 @@ import sys
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, List, TypeVar, Union
 
 import forbiddenfruit
@@ -24,9 +25,9 @@ import forbiddenfruit
 if TYPE_CHECKING:
     import threading
     from collections.abc import Callable, Iterable, Iterator
-    from types import ModuleType
 
-    ModulesType = Union[str, ModuleType, List[Union[str, ModuleType]], None]
+    _ModuleList = Union[List[Union[str, ModuleType]], None]
+    _ModuleOrModuleList = Union[str, ModuleType, _ModuleList]
 
 
 class BlockingError(Exception):
@@ -50,6 +51,7 @@ blockbuster_skip: ContextVar[bool] = ContextVar("blockbuster_skip")
 
 def _wrap_blocking(
     modules: list[str],
+    excluded_modules: list[str],
     func: Callable[..., _T],
     can_block_functions: list[tuple[str, Iterable[str]]],
     can_block_predicate: Callable[..., bool],
@@ -71,9 +73,17 @@ def _wrap_blocking(
             in_test_module = False
             while frame:
                 frame_info = inspect.getframeinfo(frame)
-                for module in modules:
-                    if frame_info.filename.startswith(module):
-                        in_test_module = True
+                if not in_test_module:
+                    in_excluded_module = False
+                    for excluded_module in excluded_modules:
+                        if frame_info.filename.startswith(excluded_module):
+                            in_excluded_module = True
+                            break
+                    if not in_excluded_module:
+                        for module in modules:
+                            if frame_info.filename.startswith(module):
+                                in_test_module = True
+                                break
                 for filename, functions in can_block_functions:
                     if (
                         frame_info.filename.endswith(filename)
@@ -90,6 +100,19 @@ def _wrap_blocking(
     return wrapper
 
 
+def _resolve_module_paths(modules: list[str | ModuleType]) -> list[str]:
+    resolved: list[str] = []
+    for module in modules:
+        module_ = importlib.import_module(module) if isinstance(module, str) else module
+        if hasattr(module_, "__path__"):
+            resolved.append(module_.__path__[0])
+        elif file := module_.__file__:
+            resolved.append(file)
+        else:
+            logging.warning("Cannot get path for %s", module_)
+    return resolved
+
+
 class BlockBusterFunction:
     """BlockBusterFunction class."""
 
@@ -98,7 +121,8 @@ class BlockBusterFunction:
         module: ModuleType | type,
         func_name: str,
         *,
-        scanned_modules: ModulesType = None,
+        scanned_modules: _ModuleOrModuleList = None,
+        excluded_modules: _ModuleList = None,
         can_block_functions: list[tuple[str, Iterable[str]]] | None = None,
         can_block_predicate: Callable[..., bool] = lambda *_, **__: False,
     ) -> None:
@@ -111,6 +135,12 @@ class BlockBusterFunction:
                 If None, the blocking calls are detected from all the modules.
                 Can be a module name, a module object, a list of module names or a
                 list of module objects.
+            excluded_modules: Sub-modules that are excluded from scanned modules.
+                It doesn't mean that blocking is allowed in these modules.
+                It means that they are not considered as scanned modules.
+                It is helpful for instance if the tests use a pytest plugin that is
+                part of the scanned modules.
+                Can be a list of module names or module objects.
             can_block_functions: Optional functions in the stack where blocking is
                 allowed.
             can_block_predicate: An optional predicate that determines if blocking is
@@ -128,19 +158,14 @@ class BlockBusterFunction:
         self._scanned_modules: list[str] = []
         if isinstance(scanned_modules, list):
             _scanned_modules = scanned_modules
-        elif isinstance(scanned_modules, str):
+        elif isinstance(scanned_modules, (str, ModuleType)):
             _scanned_modules = [scanned_modules]
         else:
             _scanned_modules = []
-        for scanned_module in _scanned_modules:
-            if isinstance(scanned_module, str):
-                module_ = importlib.import_module(scanned_module)
-                if hasattr(module_, "__path__"):
-                    self._scanned_modules.append(module_.__path__[0])
-                elif file := module_.__file__:
-                    self._scanned_modules.append(file)
-                else:
-                    logging.warning("Cannot get path for %s", scanned_module)
+        self._scanned_modules = _resolve_module_paths(_scanned_modules)
+        self._excluded_modules: list[str] = _resolve_module_paths(
+            excluded_modules or []
+        )
 
     def activate(self) -> BlockBusterFunction:
         """Activate the blocking detection."""
@@ -149,6 +174,7 @@ class BlockBusterFunction:
         self.activated = True
         checker = _wrap_blocking(
             self._scanned_modules,
+            self._excluded_modules,
             self.original_func,
             self.can_block_functions,
             self.can_block_predicate,
@@ -187,7 +213,7 @@ class BlockBusterFunction:
 
 
 def _get_time_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     return {
         "time.sleep": BlockBusterFunction(
@@ -197,15 +223,18 @@ def _get_time_wrapped_functions(
                 ("/pydevd.py", {"_do_wait_suspend"}),
             ],
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
     }
 
 
 def _get_os_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     functions = {
-        f"os.{method}": BlockBusterFunction(os, method, scanned_modules=modules)
+        f"os.{method}": BlockBusterFunction(
+            os, method, scanned_modules=modules, excluded_modules=excluded_modules
+        )
         for method in (
             "getcwd",
             "statvfs",
@@ -232,6 +261,7 @@ def _get_os_wrapped_functions(
             ("coverage/control.py", {"_should_trace"}),
         ],
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
 
     functions["os.mkdir"] = BlockBusterFunction(
@@ -239,6 +269,7 @@ def _get_os_wrapped_functions(
         "mkdir",
         can_block_functions=[("_pytest/assertion/rewrite.py", {"try_makedirs"})],
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
 
     functions["os.replace"] = BlockBusterFunction(
@@ -246,6 +277,7 @@ def _get_os_wrapped_functions(
         "replace",
         can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
 
     for method in (
@@ -254,7 +286,10 @@ def _get_os_wrapped_functions(
         "sameopenfile",
     ):
         functions[f"os.path.{method}"] = BlockBusterFunction(
-            os.path, method, scanned_modules=modules
+            os.path,
+            method,
+            scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
 
     functions["os.path.islink"] = BlockBusterFunction(
@@ -265,6 +300,7 @@ def _get_os_wrapped_functions(
             ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
         ],
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
 
     functions["os.path.abspath"] = BlockBusterFunction(
@@ -276,6 +312,7 @@ def _get_os_wrapped_functions(
             ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
         ],
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
 
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
@@ -286,19 +323,21 @@ def _get_os_wrapped_functions(
         "read",
         can_block_predicate=os_rw_exclude,
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
     functions["os.write"] = BlockBusterFunction(
         os,
         "write",
         can_block_predicate=os_rw_exclude,
         scanned_modules=modules,
+        excluded_modules=excluded_modules,
     )
 
     return functions
 
 
 def _get_io_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     stdout = sys.stdout
     stderr = sys.stderr
@@ -329,6 +368,7 @@ def _get_io_wrapped_functions(
             ],
             can_block_predicate=file_read_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
         "io.BufferedWriter.write": BlockBusterFunction(
             io.BufferedWriter,
@@ -336,18 +376,21 @@ def _get_io_wrapped_functions(
             can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
         "io.BufferedRandom.read": BlockBusterFunction(
             io.BufferedRandom,
             "read",
             can_block_predicate=file_read_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
         "io.BufferedRandom.write": BlockBusterFunction(
             io.BufferedRandom,
             "write",
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
         "io.TextIOWrapper.read": BlockBusterFunction(
             io.TextIOWrapper,
@@ -355,12 +398,14 @@ def _get_io_wrapped_functions(
             can_block_functions=[("aiofile/version.py", {"<module>"})],
             can_block_predicate=file_read_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
         "io.TextIOWrapper.write": BlockBusterFunction(
             io.TextIOWrapper,
             "write",
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
     }
 
@@ -370,7 +415,7 @@ def _socket_exclude(sock: socket.socket, *_: Any, **__: Any) -> bool:
 
 
 def _get_socket_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     return {
         f"socket.socket.{method}": BlockBusterFunction(
@@ -378,6 +423,7 @@ def _get_socket_wrapped_functions(
             method,
             can_block_predicate=_socket_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
         for method in (
             "connect",
@@ -395,7 +441,7 @@ def _get_socket_wrapped_functions(
 
 
 def _get_ssl_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     return {
         f"ssl.SSLSocket.{method}": BlockBusterFunction(
@@ -403,17 +449,21 @@ def _get_ssl_wrapped_functions(
             method,
             can_block_predicate=_socket_exclude,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
         for method in ("write", "send", "read", "recv")
     }
 
 
 def _get_sqlite_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     functions = {
         f"sqlite3.Cursor.{method}": BlockBusterFunction(
-            sqlite3.Cursor, method, scanned_modules=modules
+            sqlite3.Cursor,
+            method,
+            scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
         for method in (
             "execute",
@@ -430,13 +480,14 @@ def _get_sqlite_wrapped_functions(
             sqlite3.Connection,
             method,
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
 
     return functions
 
 
 def _get_lock_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     def lock_acquire_exclude(
         lock: threading.Lock,
@@ -455,6 +506,7 @@ def _get_lock_wrapped_functions(
                 ("asyncio/base_events.py", {"shutdown_default_executor"}),
             ],
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
         "threading.Lock.acquire_lock": BlockBusterFunction(
             _thread.LockType,
@@ -462,16 +514,20 @@ def _get_lock_wrapped_functions(
             can_block_predicate=lock_acquire_exclude,
             can_block_functions=[("threading.py", {"start"})],
             scanned_modules=modules,
+            excluded_modules=excluded_modules,
         ),
     }
 
 
 def _get_builtins_wrapped_functions(
-    modules: ModulesType = None,
+    modules: _ModuleOrModuleList = None, excluded_modules: _ModuleList = None
 ) -> dict[str, BlockBusterFunction]:
     return {
         "builtins.input": BlockBusterFunction(
-            builtins, "input", scanned_modules=modules
+            builtins,
+            "input",
+            scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
     }
 
@@ -479,7 +535,12 @@ def _get_builtins_wrapped_functions(
 class BlockBuster:
     """BlockBuster class."""
 
-    def __init__(self, scanned_modules: ModulesType = None) -> None:
+    def __init__(
+        self,
+        scanned_modules: _ModuleOrModuleList = None,
+        *,
+        excluded_modules: _ModuleList = None,
+    ) -> None:
         """Initialize BlockBuster.
 
         Args:
@@ -487,16 +548,22 @@ class BlockBuster:
                 If None, the blocking calls are detected from all the modules.
                 Can be a module name, a module object, a list of module names or a
                 list of module objects.
+            excluded_modules: Sub-modules that are excluded from scanned modules.
+                It doesn't mean that blocking is allowed in these modules.
+                It means that they are not considered as scanned modules.
+                It is helpful for instance if the tests use a pytest plugin that is
+                part of the scanned modules.
+                Can be a list of module names or module objects.
         """
         self.functions = {
-            **_get_time_wrapped_functions(scanned_modules),
-            **_get_os_wrapped_functions(scanned_modules),
-            **_get_io_wrapped_functions(scanned_modules),
-            **_get_socket_wrapped_functions(scanned_modules),
-            **_get_ssl_wrapped_functions(scanned_modules),
-            **_get_sqlite_wrapped_functions(scanned_modules),
-            **_get_lock_wrapped_functions(scanned_modules),
-            **_get_builtins_wrapped_functions(scanned_modules),
+            **_get_time_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_os_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_io_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_socket_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_ssl_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_sqlite_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_lock_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_builtins_wrapped_functions(scanned_modules, excluded_modules),
         }
 
     def activate(self) -> None:
@@ -511,15 +578,23 @@ class BlockBuster:
 
 
 @contextmanager
-def blockbuster_ctx(scanned_modules: ModulesType = None) -> Iterator[BlockBuster]:
+def blockbuster_ctx(
+    scanned_modules: _ModuleOrModuleList = None, *, excluded_modules: _ModuleList = None
+) -> Iterator[BlockBuster]:
     """Context manager for using BlockBuster.
 
     Args:
         scanned_modules: The modules from which blocking calls are detected.
             If None, the blocking calls are detected from all the modules.
             Can be a list of module names or module objects.
+        excluded_modules: Sub-modules that are excluded from scanned modules.
+            It doesn't mean that blocking is allowed in these modules.
+            It means that they are not considered as scanned modules.
+            It is helpful for instance if the tests use a pytest plugin that is
+            part of the scanned modules.
+            Can be a list of module names or module objects.
     """
-    blockbuster = BlockBuster(scanned_modules)
+    blockbuster = BlockBuster(scanned_modules, excluded_modules=excluded_modules)
     blockbuster.activate()
     yield blockbuster
     blockbuster.deactivate()
