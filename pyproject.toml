@@ -1,6 +1,6 @@
 [project]
 name = "blockbuster"
-version = "1.5.15"
+version = "1.5.16"
 description = "Utility to detect blocking calls in the async event loop"
 readme = "README.md"
 keywords = ["async", "block", "detect", "event loop", "asyncio"]
