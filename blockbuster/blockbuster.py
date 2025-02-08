@@ -10,6 +10,7 @@ import inspect
 import io
 import logging
 import os
+import platform
 import socket
 import sqlite3
 import ssl
@@ -20,14 +21,19 @@ from contextvars import ContextVar
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, List, TypeVar, Union
 
-import forbiddenfruit
-
 if TYPE_CHECKING:
     import threading
     from collections.abc import Callable, Iterable, Iterator
 
     _ModuleList = Union[List[Union[str, ModuleType]], None]
     _ModuleOrModuleList = Union[str, ModuleType, _ModuleList]
+
+if platform.python_implementation() == "CPython":
+    import forbiddenfruit
+
+    HAS_FORBIDDENFRUIT = True
+else:
+    HAS_FORBIDDENFRUIT = False
 
 
 class BlockingError(Exception):
@@ -182,6 +188,8 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, checker)
         except TypeError:
+            if not HAS_FORBIDDENFRUIT:
+                raise
             forbiddenfruit.curse(self.module, self.func_name, checker)
         return self
 
@@ -193,6 +201,8 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, self.original_func)
         except TypeError:
+            if not HAS_FORBIDDENFRUIT:
+                raise
             forbiddenfruit.curse(self.module, self.func_name, self.original_func)
         return self
 
@@ -240,7 +250,6 @@ def _get_os_wrapped_functions(
             "statvfs",
             "rename",
             "remove",
-            "unlink",
             "rmdir",
             "link",
             "symlink",
@@ -257,7 +266,7 @@ def _get_os_wrapped_functions(
             ("<frozen importlib._bootstrap>", {"_find_and_load"}),
             ("linecache.py", {"checkcache", "updatecache"}),
             ("coverage/control.py", {"_should_trace"}),
-            ("asyncio/unix_events.py", {"create_unix_server"}),
+            ("asyncio/unix_events.py", {"create_unix_server", "_stop_serving"}),
         ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
@@ -294,6 +303,16 @@ def _get_os_wrapped_functions(
         "sendfile",
         can_block_functions=[
             ("asyncio/base_events.py", {"sendfile"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
+    functions["os.unlink"] = BlockBusterFunction(
+        os,
+        "unlink",
+        can_block_functions=[
+            ("asyncio/unix_events.py", {"_stop_serving"}),
         ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
