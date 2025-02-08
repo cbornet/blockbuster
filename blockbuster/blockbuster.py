@@ -238,14 +238,12 @@ def _get_os_wrapped_functions(
         for method in (
             "getcwd",
             "statvfs",
-            "sendfile",
             "rename",
             "remove",
             "unlink",
             "rmdir",
             "link",
             "symlink",
-            "readlink",
             "listdir",
             "scandir",
             "access",
@@ -259,6 +257,7 @@ def _get_os_wrapped_functions(
             ("<frozen importlib._bootstrap>", {"_find_and_load"}),
             ("linecache.py", {"checkcache", "updatecache"}),
             ("coverage/control.py", {"_should_trace"}),
+            ("asyncio/unix_events.py", {"create_unix_server"}),
         ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
@@ -276,6 +275,26 @@ def _get_os_wrapped_functions(
         os,
         "replace",
         can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
+    functions["os.readlink"] = BlockBusterFunction(
+        os,
+        "readlink",
+        can_block_functions=[
+            ("coverage/control.py", {"_should_trace"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
+    functions["os.sendfile"] = BlockBusterFunction(
+        os,
+        "sendfile",
+        can_block_functions=[
+            ("asyncio/base_events.py", {"sendfile"}),
+        ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
     )
@@ -322,6 +341,9 @@ def _get_os_wrapped_functions(
         os,
         "read",
         can_block_predicate=os_rw_exclude,
+        can_block_functions=[
+            ("asyncio/base_events.py", {"subprocess_shell"}),
+        ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
     )
