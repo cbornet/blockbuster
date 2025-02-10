@@ -4,24 +4,21 @@ from __future__ import annotations
 
 import _thread
 import asyncio
-import builtins
 import importlib
 import inspect
 import io
 import logging
 import os
 import platform
-import socket
-import sqlite3
-import ssl
 import sys
-import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, List, TypeVar, Union
 
 if TYPE_CHECKING:
+    import socket
     import threading
     from collections.abc import Callable, Iterable, Iterator
 
@@ -38,6 +35,15 @@ else:
 
 class BlockingError(Exception):
     """BlockingError class."""
+
+    def __init__(self, func: str) -> None:
+        """Initialize BlockingError.
+
+        Args:
+            func: The blocking function.
+
+        """
+        super().__init__(f"Blocking call to {func}")
 
 
 def _blocking_error(func: Callable[..., Any]) -> BlockingError:
@@ -59,6 +65,7 @@ def _wrap_blocking(
     modules: list[str],
     excluded_modules: list[str],
     func: Callable[..., _T],
+    func_name: str,
     can_block_functions: list[tuple[str, Iterable[str]]],
     can_block_predicate: Callable[..., bool],
 ) -> Callable[..., _T]:
@@ -79,26 +86,27 @@ def _wrap_blocking(
             in_test_module = False
             while frame:
                 frame_info = inspect.getframeinfo(frame)
+                frame_file_name = Path(frame_info.filename).as_posix()
                 if not in_test_module:
                     in_excluded_module = False
                     for excluded_module in excluded_modules:
-                        if frame_info.filename.startswith(excluded_module):
+                        if frame_file_name.startswith(excluded_module):
                             in_excluded_module = True
                             break
                     if not in_excluded_module:
                         for module in modules:
-                            if frame_info.filename.startswith(module):
+                            if frame_file_name.startswith(module):
                                 in_test_module = True
                                 break
                 for filename, functions in can_block_functions:
                     if (
-                        frame_info.filename.endswith(filename)
+                        frame_file_name.endswith(filename)
                         and frame_info.function in functions
                     ):
                         return func(*args, **kwargs)
                 frame = frame.f_back
             if not modules or in_test_module:
-                raise _blocking_error(func)
+                raise BlockingError(func_name)
             return func(*args, **kwargs)
         finally:
             blockbuster_skip.reset(skip_token)
@@ -124,7 +132,7 @@ class BlockBusterFunction:
 
     def __init__(
         self,
-        module: ModuleType | type,
+        module: ModuleType | type | None,
         func_name: str,
         *,
         scanned_modules: _ModuleOrModuleList = None,
@@ -153,9 +161,24 @@ class BlockBusterFunction:
                 allowed.
 
         """
-        self.module = module
-        self.func_name = func_name
-        self.original_func = getattr(module, func_name, None)
+        if module:
+            self.module = module
+            self.func_name = func_name
+            self.original_func = getattr(module, func_name, None)
+        else:
+            tokens = func_name.split(".")
+            if len(tokens) < 2:  # noqa: PLR2004
+                msg = "module is required if func_name does not contain '.'"
+                raise ValueError(msg)
+            self.module = importlib.import_module(tokens.pop(0))
+            while len(tokens) > 1:
+                self.module = getattr(self.module, tokens.pop(0))
+            self.func_name = tokens[0]
+        self.original_func = getattr(self.module, self.func_name, None)
+        if module is None:
+            self.full_name = func_name
+        else:
+            self.full_name = f"{module.__name__}.{func_name}"
         self.can_block_functions: list[tuple[str, Iterable[str]]] = (
             can_block_functions or []
         )
@@ -182,6 +205,7 @@ class BlockBusterFunction:
             self._scanned_modules,
             self._excluded_modules,
             self.original_func,
+            self.full_name,
             self.can_block_functions,
             self.can_block_predicate,
         )
@@ -227,8 +251,8 @@ def _get_time_wrapped_functions(
 ) -> dict[str, BlockBusterFunction]:
     return {
         "time.sleep": BlockBusterFunction(
-            time,
-            "sleep",
+            None,
+            "time.sleep",
             can_block_functions=[
                 ("/pydevd.py", {"_do_wait_suspend"}),
             ],
@@ -243,7 +267,10 @@ def _get_os_wrapped_functions(
 ) -> dict[str, BlockBusterFunction]:
     functions = {
         f"os.{method}": BlockBusterFunction(
-            os, method, scanned_modules=modules, excluded_modules=excluded_modules
+            None,
+            f"os.{method}",
+            scanned_modules=modules,
+            excluded_modules=excluded_modules,
         )
         for method in (
             "getcwd",
@@ -260,8 +287,8 @@ def _get_os_wrapped_functions(
     }
 
     functions["os.stat"] = BlockBusterFunction(
-        os,
-        "stat",
+        None,
+        "os.stat",
         can_block_functions=[
             ("<frozen importlib._bootstrap>", {"_find_and_load"}),
             ("linecache.py", {"checkcache", "updatecache"}),
@@ -273,24 +300,24 @@ def _get_os_wrapped_functions(
     )
 
     functions["os.mkdir"] = BlockBusterFunction(
-        os,
-        "mkdir",
+        None,
+        "os.mkdir",
         can_block_functions=[("_pytest/assertion/rewrite.py", {"try_makedirs"})],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
     )
 
     functions["os.replace"] = BlockBusterFunction(
-        os,
-        "replace",
+        None,
+        "os.replace",
         can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
     )
 
     functions["os.readlink"] = BlockBusterFunction(
-        os,
-        "readlink",
+        None,
+        "os.readlink",
         can_block_functions=[
             ("coverage/control.py", {"_should_trace"}),
         ],
@@ -299,8 +326,8 @@ def _get_os_wrapped_functions(
     )
 
     functions["os.sendfile"] = BlockBusterFunction(
-        os,
-        "sendfile",
+        None,
+        "os.sendfile",
         can_block_functions=[
             ("asyncio/base_events.py", {"sendfile"}),
         ],
@@ -309,8 +336,8 @@ def _get_os_wrapped_functions(
     )
 
     functions["os.unlink"] = BlockBusterFunction(
-        os,
-        "unlink",
+        None,
+        "os.unlink",
         can_block_functions=[
             ("asyncio/unix_events.py", {"_stop_serving"}),
         ],
@@ -324,15 +351,15 @@ def _get_os_wrapped_functions(
         "sameopenfile",
     ):
         functions[f"os.path.{method}"] = BlockBusterFunction(
-            os.path,
-            method,
+            None,
+            f"os.path.{method}",
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         )
 
     functions["os.path.islink"] = BlockBusterFunction(
-        os.path,
-        "islink",
+        None,
+        "os.path.islink",
         can_block_functions=[
             ("coverage/control.py", {"_should_trace"}),
             ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
@@ -342,8 +369,8 @@ def _get_os_wrapped_functions(
     )
 
     functions["os.path.abspath"] = BlockBusterFunction(
-        os.path,
-        "abspath",
+        None,
+        "os.path.abspath",
         can_block_functions=[
             ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
             ("coverage/control.py", {"_should_trace"}),
@@ -354,11 +381,11 @@ def _get_os_wrapped_functions(
     )
 
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
-        return not os.get_blocking(fd)
+        return hasattr(os, "get_blocking") and not os.get_blocking(fd)
 
     functions["os.read"] = BlockBusterFunction(
-        os,
-        "read",
+        None,
+        "os.read",
         can_block_predicate=os_rw_exclude,
         can_block_functions=[
             ("asyncio/base_events.py", {"subprocess_shell"}),
@@ -367,8 +394,8 @@ def _get_os_wrapped_functions(
         excluded_modules=excluded_modules,
     )
     functions["os.write"] = BlockBusterFunction(
-        os,
-        "write",
+        None,
+        "os.write",
         can_block_predicate=os_rw_exclude,
         scanned_modules=modules,
         excluded_modules=excluded_modules,
@@ -401,8 +428,8 @@ def _get_io_wrapped_functions(
 
     return {
         "io.BufferedReader.read": BlockBusterFunction(
-            io.BufferedReader,
-            "read",
+            None,
+            "io.BufferedReader.read",
             can_block_functions=[
                 ("<frozen importlib._bootstrap_external>", {"get_data"}),
                 ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
@@ -412,38 +439,38 @@ def _get_io_wrapped_functions(
             excluded_modules=excluded_modules,
         ),
         "io.BufferedWriter.write": BlockBusterFunction(
-            io.BufferedWriter,
-            "write",
+            None,
+            "io.BufferedWriter.write",
             can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         ),
         "io.BufferedRandom.read": BlockBusterFunction(
-            io.BufferedRandom,
-            "read",
+            None,
+            "io.BufferedRandom.read",
             can_block_predicate=file_read_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         ),
         "io.BufferedRandom.write": BlockBusterFunction(
-            io.BufferedRandom,
-            "write",
+            None,
+            "io.BufferedRandom.write",
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         ),
         "io.TextIOWrapper.read": BlockBusterFunction(
-            io.TextIOWrapper,
-            "read",
+            None,
+            "io.TextIOWrapper.read",
             can_block_functions=[("aiofile/version.py", {"<module>"})],
             can_block_predicate=file_read_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         ),
         "io.TextIOWrapper.write": BlockBusterFunction(
-            io.TextIOWrapper,
-            "write",
+            None,
+            "io.TextIOWrapper.write",
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
@@ -460,8 +487,8 @@ def _get_socket_wrapped_functions(
 ) -> dict[str, BlockBusterFunction]:
     return {
         f"socket.socket.{method}": BlockBusterFunction(
-            socket.socket,
-            method,
+            None,
+            f"socket.socket.{method}",
             can_block_predicate=_socket_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
@@ -486,8 +513,8 @@ def _get_ssl_wrapped_functions(
 ) -> dict[str, BlockBusterFunction]:
     return {
         f"ssl.SSLSocket.{method}": BlockBusterFunction(
-            ssl.SSLSocket,
-            method,
+            None,
+            f"ssl.SSLSocket.{method}",
             can_block_predicate=_socket_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
@@ -501,8 +528,8 @@ def _get_sqlite_wrapped_functions(
 ) -> dict[str, BlockBusterFunction]:
     functions = {
         f"sqlite3.Cursor.{method}": BlockBusterFunction(
-            sqlite3.Cursor,
-            method,
+            None,
+            f"sqlite3.Cursor.{method}",
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         )
@@ -518,8 +545,8 @@ def _get_sqlite_wrapped_functions(
 
     for method in ("execute", "executemany", "executescript", "commit", "rollback"):
         functions[f"sqlite3.Connection.{method}"] = BlockBusterFunction(
-            sqlite3.Connection,
-            method,
+            None,
+            f"sqlite3.Connection.{method}",
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         )
@@ -565,8 +592,8 @@ def _get_builtins_wrapped_functions(
 ) -> dict[str, BlockBusterFunction]:
     return {
         "builtins.input": BlockBusterFunction(
-            builtins,
-            "input",
+            None,
+            "builtins.input",
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         )
