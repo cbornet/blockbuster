@@ -212,9 +212,8 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, checker)
         except TypeError:
-            if not HAS_FORBIDDENFRUIT:
-                raise
-            forbiddenfruit.curse(self.module, self.func_name, checker)
+            if HAS_FORBIDDENFRUIT:
+                forbiddenfruit.curse(self.module, self.func_name, checker)
         return self
 
     def deactivate(self) -> BlockBusterFunction:
@@ -225,9 +224,8 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, self.original_func)
         except TypeError:
-            if not HAS_FORBIDDENFRUIT:
-                raise
-            forbiddenfruit.curse(self.module, self.func_name, self.original_func)
+            if HAS_FORBIDDENFRUIT:
+                forbiddenfruit.curse(self.module, self.func_name, self.original_func)
         return self
 
     def can_block_in(
