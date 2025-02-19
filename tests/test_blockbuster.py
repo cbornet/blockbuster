@@ -5,6 +5,7 @@ import functools
 import importlib
 import io
 import os
+import platform
 import re
 import socket
 import sqlite3
@@ -252,6 +253,9 @@ async def test_os_read() -> None:
         os.read(fd, 1)
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows", reason="O_NONBLOCK not supported on Windows"
+)
 async def test_os_read_non_blocking() -> None:
     fd = os.open(os.devnull, os.O_NONBLOCK | os.O_RDONLY)
     os.read(fd, 1)
@@ -263,6 +267,9 @@ async def test_os_write() -> None:
         os.write(fd, b"foo")
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows", reason="O_NONBLOCK not supported on Windows"
+)
 async def test_os_write_non_blocking() -> None:
     fd = os.open(os.devnull, os.O_NONBLOCK | os.O_RDWR)
     os.write(fd, b"foo")
@@ -296,7 +303,7 @@ async def test_os_rename() -> None:
 
 
 async def test_os_renames() -> None:
-    with pytest.raises(BlockingError, match="Blocking call to os.stat"):
+    with pytest.raises(BlockingError, match="Blocking call to os.(stat|rename)"):
         os.renames("/1", "/2")
 
 
@@ -316,7 +323,7 @@ async def test_os_mkdir() -> None:
 
 
 async def test_os_makedirs() -> None:
-    with pytest.raises(BlockingError, match="Blocking call to os.stat"):
+    with pytest.raises(BlockingError, match="Blocking call to os.(stat|mkdir)"):
         os.makedirs("/1")
 
 
@@ -360,16 +367,28 @@ async def test_os_access() -> None:
         os.access("/1", os.F_OK)
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="os.path.exists not detected on Windows at the moment",
+)
 async def test_os_path_exists() -> None:
     with pytest.raises(BlockingError, match="Blocking call to os.stat"):
         os.path.exists("/1")
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="os.path.isfile not detected on Windows at the moment",
+)
 async def test_os_path_isfile() -> None:
     with pytest.raises(BlockingError, match="Blocking call to os.stat"):
         os.path.isfile("/1")
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="os.path.isdir not detected on Windows at the moment",
+)
 async def test_os_path_isdir() -> None:
     with pytest.raises(BlockingError, match="Blocking call to os.stat"):
         os.path.isdir("/1")

@@ -86,18 +86,18 @@ def _wrap_blocking(
             in_test_module = False
             while frame:
                 frame_info = inspect.getframeinfo(frame)
-                frame_file_name = Path(frame_info.filename).as_posix()
                 if not in_test_module:
                     in_excluded_module = False
                     for excluded_module in excluded_modules:
-                        if frame_file_name.startswith(excluded_module):
+                        if frame_info.filename.startswith(excluded_module):
                             in_excluded_module = True
                             break
                     if not in_excluded_module:
                         for module in modules:
-                            if frame_file_name.startswith(module):
+                            if frame_info.filename.startswith(module):
                                 in_test_module = True
                                 break
+                frame_file_name = Path(frame_info.filename).as_posix()
                 for filename, functions in can_block_functions:
                     if (
                         frame_file_name.endswith(filename)
@@ -381,22 +381,27 @@ def _get_os_wrapped_functions(
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return hasattr(os, "get_blocking") and not os.get_blocking(fd)
 
+    os_rw_kwargs = (
+        {} if platform.system() == "Windows" else {"can_block_predicate": os_rw_exclude}
+    )
+
     functions["os.read"] = BlockBusterFunction(
         None,
         "os.read",
-        can_block_predicate=os_rw_exclude,
         can_block_functions=[
             ("asyncio/base_events.py", {"subprocess_shell"}),
         ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
+        **os_rw_kwargs,
     )
     functions["os.write"] = BlockBusterFunction(
         None,
         "os.write",
-        can_block_predicate=os_rw_exclude,
+        can_block_functions=None,
         scanned_modules=modules,
         excluded_modules=excluded_modules,
+        **os_rw_kwargs,
     )
 
     return functions

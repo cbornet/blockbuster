@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.8"
 
 [[package]]
@@ -15,7 +16,7 @@ wheels = [
 
 [[package]]
 name = "blockbuster"
-version = "1.5.18"
+version = "1.5.19"
 source = { editable = "." }
 dependencies = [
     { name = "forbiddenfruit" },
