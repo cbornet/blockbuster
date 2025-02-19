@@ -44,6 +44,6 @@ jobs:
       - name: Install the project
         run: uv sync --dev
       - name: Run unit tests
-        run: uv run pytest tests -vv -s
+        run: uv run pytest tests -vv
       - name: Minimize uv cache
         run: uv cache prune --ci
