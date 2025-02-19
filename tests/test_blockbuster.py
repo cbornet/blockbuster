@@ -150,7 +150,6 @@ async def test_file_write_bytes(test_file: Path) -> None:
             f.write(b"foo")
 
 
-@pytest.mark.skip
 async def test_write_std() -> None:
     sys.stdout.write("test")
     sys.stderr.write("test")
@@ -357,9 +356,12 @@ async def test_os_listdir() -> None:
         os.listdir("/1")
 
 
+@pytest.mark.skipif(sys.version_info < (3, 9), reason="requires Python 3.9+")
 async def test_os_scandir() -> None:
-    with pytest.raises(BlockingError, match="Blocking call to os.scandir"):
-        os.scandir("/1")
+    with os.scandir(tempfile.tempdir) as files, pytest.raises(
+        BlockingError, match="Blocking call to ScandirIterator.__next__"
+    ):
+        next(files)
 
 
 async def test_os_access() -> None:
