@@ -271,7 +271,6 @@ def _get_os_wrapped_functions(
             excluded_modules=excluded_modules,
         )
         for method in (
-            "getcwd",
             "statvfs",
             "rename",
             "remove",
@@ -282,6 +281,16 @@ def _get_os_wrapped_functions(
             "access",
         )
     }
+
+    functions["os.getcwd"] = BlockBusterFunction(
+        None,
+        "os.getcwd",
+        can_block_functions=[
+            ("coverage/control.py", {"_should_trace"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
 
     functions["os.stat"] = BlockBusterFunction(
         None,
