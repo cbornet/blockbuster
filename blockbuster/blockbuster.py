@@ -11,7 +11,6 @@ import logging
 import os
 import platform
 import sys
-import tempfile
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -344,12 +343,13 @@ def _get_os_wrapped_functions(
     )
 
     if platform.python_implementation() != "CPython" or sys.version_info >= (3, 9):
-        functions["os.scandir"] = BlockBusterFunction(
-            type(os.scandir(tempfile.tempdir)),
-            "__next__",
-            scanned_modules=modules,
-            excluded_modules=excluded_modules,
-        )
+        with os.scandir() as scandir_it:
+            functions["os.scandir"] = BlockBusterFunction(
+                type(scandir_it),
+                "__next__",
+                scanned_modules=modules,
+                excluded_modules=excluded_modules,
+            )
 
     for method in (
         "ismount",
