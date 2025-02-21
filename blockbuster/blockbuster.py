@@ -406,6 +406,7 @@ def _get_os_wrapped_functions(
         None,
         "os.read",
         can_block_functions=[
+            ("asyncio/base_events.py", {"subprocess_exec"}),
             ("asyncio/base_events.py", {"subprocess_shell"}),
         ],
         scanned_modules=modules,

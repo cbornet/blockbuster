@@ -16,7 +16,7 @@ wheels = [
 
 [[package]]
 name = "blockbuster"
-version = "1.5.22"
+version = "1.5.23"
 source = { editable = "." }
 dependencies = [
     { name = "forbiddenfruit" },
