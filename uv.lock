@@ -16,10 +16,10 @@ wheels = [
 
 [[package]]
 name = "blockbuster"
-version = "1.5.23"
+version = "1.5.24"
 source = { editable = "." }
 dependencies = [
-    { name = "forbiddenfruit" },
+    { name = "forbiddenfruit", marker = "implementation_name == 'cpython'" },
 ]
 
 [package.dev-dependencies]
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "forbiddenfruit", specifier = ">=0.1.4" }]
+requires-dist = [{ name = "forbiddenfruit", marker = "implementation_name == 'cpython'", specifier = ">=0.1.4" }]
 
 [package.metadata.requires-dev]
 dev = [
