@@ -15,14 +15,14 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, List, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 if TYPE_CHECKING:
     import socket
     import threading
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
-    _ModuleList = Union[List[Union[str, ModuleType]], None]
+    _ModuleList = Union[Sequence[Union[str, ModuleType]], None]
     _ModuleOrModuleList = Union[str, ModuleType, _ModuleList]
 
 if platform.python_implementation() == "CPython":
@@ -114,7 +114,7 @@ def _wrap_blocking(
     return wrapper
 
 
-def _resolve_module_paths(modules: list[str | ModuleType]) -> list[str]:
+def _resolve_module_paths(modules: Sequence[str | ModuleType]) -> list[str]:
     resolved: list[str] = []
     for module in modules:
         module_ = importlib.import_module(module) if isinstance(module, str) else module
