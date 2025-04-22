@@ -184,17 +184,12 @@ class BlockBusterFunction:
         )
         self.can_block_predicate: Callable[..., bool] = can_block_predicate
         self.activated = False
-        self._scanned_modules: list[str] = []
-        if isinstance(scanned_modules, list):
-            _scanned_modules = scanned_modules
-        elif isinstance(scanned_modules, (str, ModuleType)):
+        if isinstance(scanned_modules, (str, ModuleType)):
             _scanned_modules = [scanned_modules]
         else:
-            _scanned_modules = []
+            _scanned_modules = scanned_modules or []
         self._scanned_modules = _resolve_module_paths(_scanned_modules)
-        self._excluded_modules: list[str] = _resolve_module_paths(
-            excluded_modules or []
-        )
+        self._excluded_modules = _resolve_module_paths(excluded_modules or [])
 
     def activate(self) -> BlockBusterFunction:
         """Activate the blocking detection."""
