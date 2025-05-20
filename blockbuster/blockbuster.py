@@ -185,7 +185,7 @@ class BlockBusterFunction:
         self.can_block_predicate: Callable[..., bool] = can_block_predicate
         self.activated = False
         if isinstance(scanned_modules, (str, ModuleType)):
-            _scanned_modules = [scanned_modules]
+            _scanned_modules: Sequence[str | ModuleType] = [scanned_modules]
         else:
             _scanned_modules = scanned_modules or []
         self._scanned_modules = _resolve_module_paths(_scanned_modules)
