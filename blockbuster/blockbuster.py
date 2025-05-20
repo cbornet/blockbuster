@@ -15,14 +15,14 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, List, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 if TYPE_CHECKING:
     import socket
     import threading
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
-    _ModuleList = Union[List[Union[str, ModuleType]], None]
+    _ModuleList = Union[Sequence[Union[str, ModuleType]], None]
     _ModuleOrModuleList = Union[str, ModuleType, _ModuleList]
 
 if platform.python_implementation() == "CPython":
@@ -114,7 +114,7 @@ def _wrap_blocking(
     return wrapper
 
 
-def _resolve_module_paths(modules: list[str | ModuleType]) -> list[str]:
+def _resolve_module_paths(modules: Sequence[str | ModuleType]) -> list[str]:
     resolved: list[str] = []
     for module in modules:
         module_ = importlib.import_module(module) if isinstance(module, str) else module
@@ -184,17 +184,12 @@ class BlockBusterFunction:
         )
         self.can_block_predicate: Callable[..., bool] = can_block_predicate
         self.activated = False
-        self._scanned_modules: list[str] = []
-        if isinstance(scanned_modules, list):
-            _scanned_modules = scanned_modules
-        elif isinstance(scanned_modules, (str, ModuleType)):
-            _scanned_modules = [scanned_modules]
+        if isinstance(scanned_modules, (str, ModuleType)):
+            _scanned_modules: Sequence[str | ModuleType] = [scanned_modules]
         else:
-            _scanned_modules = []
+            _scanned_modules = scanned_modules or []
         self._scanned_modules = _resolve_module_paths(_scanned_modules)
-        self._excluded_modules: list[str] = _resolve_module_paths(
-            excluded_modules or []
-        )
+        self._excluded_modules = _resolve_module_paths(excluded_modules or [])
 
     def activate(self) -> BlockBusterFunction:
         """Activate the blocking detection."""
