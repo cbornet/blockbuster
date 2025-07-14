@@ -1,4 +1,4 @@
-![blockbuster](./blockbuster.png)
+# Blockbuster
 
 Blockbuster is a Python package designed to detect and prevent blocking calls within an asynchronous event loop.
 It is particularly useful when executing tests to ensure that your asynchronous code does not inadvertently call blocking operations, 
