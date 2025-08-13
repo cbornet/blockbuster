@@ -586,7 +586,7 @@ def _get_lock_wrapped_functions(
             "acquire",
             can_block_predicate=lock_acquire_exclude,
             can_block_functions=[
-                ("threading.py", {"start"}),
+                ("threading.py", {"start", "_acquire_restore"}),
                 ("/pydevd.py", {"_do_wait_suspend"}),
                 ("asyncio/base_events.py", {"shutdown_default_executor"}),
             ],
@@ -597,7 +597,7 @@ def _get_lock_wrapped_functions(
             _thread.LockType,
             "acquire_lock",
             can_block_predicate=lock_acquire_exclude,
-            can_block_functions=[("threading.py", {"start"})],
+            can_block_functions=[("threading.py", {"start", "_acquire_restore"})],
             scanned_modules=modules,
             excluded_modules=excluded_modules,
         ),
