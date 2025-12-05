@@ -457,7 +457,10 @@ def _get_io_wrapped_functions(
         "io.BufferedWriter.write": BlockBusterFunction(
             None,
             "io.BufferedWriter.write",
-            can_block_functions=[("_pytest/assertion/rewrite.py", {"_write_pyc"})],
+            can_block_functions=[
+                ("<frozen importlib._bootstrap>", {"_find_and_load"}),
+                ("_pytest/assertion/rewrite.py", {"_write_pyc"}),
+            ],
             can_block_predicate=file_write_exclude,
             scanned_modules=modules,
             excluded_modules=excluded_modules,
