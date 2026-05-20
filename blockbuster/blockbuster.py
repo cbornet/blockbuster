@@ -331,6 +331,7 @@ def _get_os_wrapped_functions(
         "os.sendfile",
         can_block_functions=[
             ("asyncio/base_events.py", {"sendfile"}),
+            ("asyncio/unix_events.py", {"_sock_sendfile_native_impl"}),
         ],
         scanned_modules=modules,
         excluded_modules=excluded_modules,
