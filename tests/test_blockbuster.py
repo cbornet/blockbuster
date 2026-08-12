@@ -15,11 +15,13 @@ import threading
 import time
 from asyncio import events
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Callable, Iterator, TypeVar
 
 import pytest
 import requests
 
+import blockbuster.blockbuster as blockbuster_module
 import tests
 from blockbuster import BlockBuster, BlockBusterFunction, BlockingError, blockbuster_ctx
 from tests import subpackage
