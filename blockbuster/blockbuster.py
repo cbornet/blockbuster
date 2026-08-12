@@ -13,17 +13,22 @@ import platform
 import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
-from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, TypeVar, Union
+
+
+class _ModulePaths:
+    def __init__(self, paths: list[str]) -> None:
+        self.paths = tuple(paths)
+
 
 if TYPE_CHECKING:
     import socket
     import threading
     from collections.abc import Callable, Iterable, Iterator, Sequence
 
-    _ModuleList = Union[Sequence[Union[str, ModuleType]], None]
-    _ModuleOrModuleList = Union[str, ModuleType, _ModuleList]
+    _ModuleList = Union[Sequence[Union[str, ModuleType]], _ModulePaths, None]
+    _ModuleOrModuleList = Union[str, ModuleType, _ModuleList, _ModulePaths]
 
 if platform.python_implementation() == "CPython":
     import forbiddenfruit
@@ -62,8 +67,8 @@ blockbuster_skip: ContextVar[bool] = ContextVar("blockbuster_skip")
 
 
 def _wrap_blocking(
-    modules: list[str],
-    excluded_modules: list[str],
+    modules: Sequence[str],
+    excluded_modules: Sequence[str],
     func: Callable[..., _T],
     func_name: str,
     can_block_functions: list[tuple[str, Iterable[str]]],
@@ -85,23 +90,23 @@ def _wrap_blocking(
             frame = inspect.currentframe()
             in_test_module = False
             while frame:
-                frame_info = inspect.getframeinfo(frame)
+                frame_filename = frame.f_code.co_filename
                 if not in_test_module:
                     in_excluded_module = False
                     for excluded_module in excluded_modules:
-                        if frame_info.filename.startswith(excluded_module):
+                        if frame_filename.startswith(excluded_module):
                             in_excluded_module = True
                             break
                     if not in_excluded_module:
                         for module in modules:
-                            if frame_info.filename.startswith(module):
+                            if frame_filename.startswith(module):
                                 in_test_module = True
                                 break
-                frame_file_name = Path(frame_info.filename).as_posix()
+                frame_file_name = frame_filename.replace("\\", "/")
                 for filename, functions in can_block_functions:
                     if (
                         frame_file_name.endswith(filename)
-                        and frame_info.function in functions
+                        and frame.f_code.co_name in functions
                     ):
                         return func(*args, **kwargs)
                 frame = frame.f_back
@@ -114,9 +119,13 @@ def _wrap_blocking(
     return wrapper
 
 
-def _resolve_module_paths(modules: Sequence[str | ModuleType]) -> list[str]:
+def _resolve_module_paths(modules: _ModuleOrModuleList | _ModulePaths) -> _ModulePaths:
+    if isinstance(modules, _ModulePaths):
+        return modules
+    if isinstance(modules, (str, ModuleType)):
+        modules = [modules]
     resolved: list[str] = []
-    for module in modules:
+    for module in modules or []:
         module_ = importlib.import_module(module) if isinstance(module, str) else module
         if hasattr(module_, "__path__"):
             resolved.append(module_.__path__[0])
@@ -124,7 +133,7 @@ def _resolve_module_paths(modules: Sequence[str | ModuleType]) -> list[str]:
             resolved.append(file)
         else:
             logging.warning("Cannot get path for %s", module_)
-    return resolved
+    return _ModulePaths(resolved)
 
 
 class BlockBusterFunction:
@@ -184,12 +193,8 @@ class BlockBusterFunction:
         )
         self.can_block_predicate: Callable[..., bool] = can_block_predicate
         self.activated = False
-        if isinstance(scanned_modules, (str, ModuleType)):
-            _scanned_modules: Sequence[str | ModuleType] = [scanned_modules]
-        else:
-            _scanned_modules = scanned_modules or []
-        self._scanned_modules = _resolve_module_paths(_scanned_modules)
-        self._excluded_modules = _resolve_module_paths(excluded_modules or [])
+        self._scanned_modules = _resolve_module_paths(scanned_modules).paths
+        self._excluded_modules = _resolve_module_paths(excluded_modules).paths
 
     def activate(self) -> BlockBusterFunction:
         """Activate the blocking detection."""
@@ -648,15 +653,23 @@ class BlockBuster:
                 part of the scanned modules.
                 Can be a list of module names or module objects.
         """
+        scanned_module_paths = _resolve_module_paths(scanned_modules)
+        excluded_module_paths = _resolve_module_paths(excluded_modules)
         self.functions = {
-            **_get_time_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_os_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_io_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_socket_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_ssl_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_sqlite_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_lock_wrapped_functions(scanned_modules, excluded_modules),
-            **_get_builtins_wrapped_functions(scanned_modules, excluded_modules),
+            **_get_time_wrapped_functions(scanned_module_paths, excluded_module_paths),
+            **_get_os_wrapped_functions(scanned_module_paths, excluded_module_paths),
+            **_get_io_wrapped_functions(scanned_module_paths, excluded_module_paths),
+            **_get_socket_wrapped_functions(
+                scanned_module_paths, excluded_module_paths
+            ),
+            **_get_ssl_wrapped_functions(scanned_module_paths, excluded_module_paths),
+            **_get_sqlite_wrapped_functions(
+                scanned_module_paths, excluded_module_paths
+            ),
+            **_get_lock_wrapped_functions(scanned_module_paths, excluded_module_paths),
+            **_get_builtins_wrapped_functions(
+                scanned_module_paths, excluded_module_paths
+            ),
         }
 
     def activate(self) -> None:
