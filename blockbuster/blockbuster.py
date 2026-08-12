@@ -317,6 +317,7 @@ def _get_os_wrapped_functions(
             ("<frozen importlib._bootstrap>", {"_find_and_load"}),
             ("linecache.py", {"checkcache", "updatecache"}),
             ("coverage/control.py", {"_should_trace"}),
+            ("coverage/python.py", {"get_python_source"}),
             ("asyncio/unix_events.py", {"create_unix_server", "_stop_serving"}),
         ],
         scanned_modules=modules,
@@ -473,6 +474,7 @@ def _get_io_wrapped_functions(
             can_block_functions=[
                 ("<frozen importlib._bootstrap_external>", {"get_data"}),
                 ("_pytest/assertion/rewrite.py", {"_rewrite_test", "_read_pyc"}),
+                ("coverage/python.py", {"read_python_source"}),
             ],
             can_block_predicate=file_read_exclude,
             scanned_modules=modules,

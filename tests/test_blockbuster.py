@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import contextvars
@@ -25,6 +27,30 @@ import tests
 from blockbuster import BlockBuster, BlockBusterFunction, BlockingError, blockbuster_ctx
 from blockbuster.blockbuster import blockbuster_skip
 from tests import subpackage
+
+coverage_python: dict[str, object] = {"os": os}
+exec(  # noqa: S102
+    compile(
+        """
+def get_python_source(path):
+    return os.stat(path)
+
+def read_python_source(path):
+    with open(path, 'rb') as file:
+        return file.read()
+""",
+        "coverage/python.py",
+        "exec",
+    ),
+    coverage_python,
+)
+get_python_source_ = coverage_python["get_python_source"]
+read_python_source_ = coverage_python["read_python_source"]
+if not callable(get_python_source_) or not callable(read_python_source_):
+    msg = "Failed to create coverage source-read helpers"
+    raise TypeError(msg)
+get_python_source: Callable[[str], object] = get_python_source_
+read_python_source: Callable[[str], object] = read_python_source_
 
 _T = TypeVar("_T")
 
@@ -200,6 +226,17 @@ async def test_thread_start() -> None:
 
 async def test_import_module() -> None:
     importlib.reload(requests)
+
+
+async def test_coverage_source_reads_are_allowed() -> None:
+    assert get_python_source(__file__)
+    assert read_python_source(__file__)
+    with pytest.raises(BlockingError, match="Blocking call to os.stat"):
+        os.stat(__file__)
+    with Path(__file__).open("rb") as file, pytest.raises(  # noqa: ASYNC230
+        BlockingError, match="Blocking call to io.BufferedReader.read"
+    ):
+        file.read()
 
 
 def allowed_read(test_file: Path) -> None:
