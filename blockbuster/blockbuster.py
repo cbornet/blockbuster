@@ -195,7 +195,6 @@ class BlockBusterFunction:
         """Activate the blocking detection."""
         if self.original_func is None or self.activated:
             return self
-        self.activated = True
         checker = _wrap_blocking(
             self._scanned_modules,
             self._excluded_modules,
@@ -209,18 +208,23 @@ class BlockBusterFunction:
         except TypeError:
             if HAS_FORBIDDENFRUIT:
                 forbiddenfruit.curse(self.module, self.func_name, checker)
+            else:
+                return self
+        self.activated = True
         return self
 
     def deactivate(self) -> BlockBusterFunction:
         """Deactivate the blocking detection."""
         if self.original_func is None or not self.activated:
             return self
-        self.activated = False
         try:
             setattr(self.module, self.func_name, self.original_func)
         except TypeError:
             if HAS_FORBIDDENFRUIT:
                 forbiddenfruit.curse(self.module, self.func_name, self.original_func)
+            else:
+                return self
+        self.activated = False
         return self
 
     def can_block_in(
@@ -661,8 +665,17 @@ class BlockBuster:
 
     def activate(self) -> None:
         """Activate all the functions."""
-        for wrapped_function in self.functions.values():
-            wrapped_function.activate()
+        activated_functions: list[BlockBusterFunction] = []
+        try:
+            for wrapped_function in self.functions.values():
+                was_activated = wrapped_function.activated
+                wrapped_function.activate()
+                if wrapped_function.activated and not was_activated:
+                    activated_functions.append(wrapped_function)
+        except BaseException:
+            for wrapped_function in reversed(activated_functions):
+                wrapped_function.deactivate()
+            raise
 
     def deactivate(self) -> None:
         """Deactivate all the functions."""
@@ -689,5 +702,7 @@ def blockbuster_ctx(
     """
     blockbuster = BlockBuster(scanned_modules, excluded_modules=excluded_modules)
     blockbuster.activate()
-    yield blockbuster
-    blockbuster.deactivate()
+    try:
+        yield blockbuster
+    finally:
+        blockbuster.deactivate()

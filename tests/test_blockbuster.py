@@ -21,7 +21,7 @@ import pytest
 import requests
 
 import tests
-from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
+from blockbuster import BlockBuster, BlockBusterFunction, BlockingError, blockbuster_ctx
 from tests import subpackage
 
 _T = TypeVar("_T")
@@ -216,6 +216,54 @@ async def test_cleanup(blockbuster: BlockBuster, test_file: Path) -> None:
     blockbuster.deactivate()
     with test_file.open(mode="wb") as f:
         f.write(b"foo")
+
+
+def test_context_manager_deactivates_after_error(blockbuster: BlockBuster) -> None:
+    blockbuster.deactivate()
+    original_sleep = time.sleep
+    message = "context failed"
+
+    def fail_in_context() -> None:
+        with blockbuster_module.blockbuster_ctx():
+            assert time.sleep is not original_sleep
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match=message):
+        fail_in_context()
+
+    assert time.sleep is original_sleep
+
+
+def _raise_activation_error() -> None:
+    message = "activation failed"
+    raise RuntimeError(message)
+
+
+def _noop() -> None:
+    pass
+
+
+class _TestFunctions(ModuleType):
+    first = _noop
+    second = _noop
+
+
+def test_partial_activation_is_rolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _TestFunctions("test_partial_activation")
+    first = BlockBusterFunction(module, "first")
+    second = BlockBusterFunction(module, "second")
+    blockbuster = BlockBuster()
+    blockbuster.functions = {"first": first, "second": second}
+    monkeypatch.setattr(second, "activate", _raise_activation_error)
+
+    with pytest.raises(RuntimeError, match="activation failed"):
+        blockbuster.activate()
+
+    assert module.__dict__["first"] is first.original_func
+    assert first.activated is False
+    assert second.activated is False
 
 
 async def test_scanned_modules(blockbuster: BlockBuster, test_file: Path) -> None:
