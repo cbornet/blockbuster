@@ -237,6 +237,37 @@ async def test_coverage_source_reads_are_allowed() -> None:
         file.read()
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 14), reason="coverage sys.monitoring requires Python 3.14"
+)
+async def test_coverage_sysmon_source_reads(
+    blockbuster: BlockBuster, test_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for function in blockbuster.functions.values():
+        function.deactivate()
+    coverage = pytest.importorskip("coverage")
+    monkeypatch.setenv("COVERAGE_CORE", "sysmon")
+    test_file.write_text("if True:\n    value = 1\n", encoding="utf-8")
+    code = compile(test_file.read_text(), str(test_file), "exec")
+    cov = coverage.Coverage(branch=True)
+    cov.start()
+    assert cov._collector.tracer_name() == "SysMonitor"  # noqa: SLF001
+    namespace: dict[str, object] = {}
+    exec(code, namespace)  # noqa: S102
+    cov.stop()
+    cov.save()
+    blockbuster.functions["os.stat"].activate()
+    blockbuster.functions["io.BufferedReader.read"].activate()
+    cov.report([str(test_file)])
+
+    with pytest.raises(BlockingError, match="Blocking call to os.stat"):
+        os.stat(test_file)
+    with test_file.open("rb") as file, pytest.raises(
+        BlockingError, match="Blocking call to io.BufferedReader.read"
+    ):
+        file.read()
+
+
 def allowed_read(test_file: Path) -> None:
     with test_file.open(mode="rb") as f:
         f.read(1)
