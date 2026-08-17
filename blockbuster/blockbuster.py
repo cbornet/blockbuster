@@ -32,6 +32,8 @@ if platform.python_implementation() == "CPython":
 else:
     HAS_FORBIDDENFRUIT = False
 
+logger = logging.getLogger(__name__)
+
 
 class BlockingError(Exception):
     """BlockingError class."""
@@ -123,7 +125,7 @@ def _resolve_module_paths(modules: Sequence[str | ModuleType]) -> list[str]:
         elif file := module_.__file__:
             resolved.append(file)
         else:
-            logging.warning("Cannot get path for %s", module_)
+            logger.warning("Cannot get path for %s", module_)
     return resolved
 
 
@@ -160,6 +162,10 @@ class BlockBusterFunction:
             can_block_predicate: An optional predicate that determines if blocking is
                 allowed.
 
+        Raises:
+            ValueError: If module is not provided and the function name doesn't contain
+                a dot.
+
         """
         if module:
             self.module = module
@@ -185,14 +191,18 @@ class BlockBusterFunction:
         self.can_block_predicate: Callable[..., bool] = can_block_predicate
         self.activated = False
         if isinstance(scanned_modules, (str, ModuleType)):
-            _scanned_modules: Sequence[str | ModuleType] = [scanned_modules]
+            scanned_modules_: Sequence[str | ModuleType] = [scanned_modules]
         else:
-            _scanned_modules = scanned_modules or []
-        self._scanned_modules = _resolve_module_paths(_scanned_modules)
+            scanned_modules_ = scanned_modules or []
+        self._scanned_modules = _resolve_module_paths(scanned_modules_)
         self._excluded_modules = _resolve_module_paths(excluded_modules or [])
 
     def activate(self) -> BlockBusterFunction:
-        """Activate the blocking detection."""
+        """Activate the blocking detection.
+
+        Returns:
+            This BlockBusterFunction.
+        """
         if self.original_func is None or self.activated:
             return self
         checker = _wrap_blocking(
@@ -213,7 +223,11 @@ class BlockBusterFunction:
         return self
 
     def deactivate(self) -> BlockBusterFunction:
-        """Deactivate the blocking detection."""
+        """Deactivate the blocking detection.
+
+        Returns:
+            This BlockBusterFunction.
+        """
         if self.original_func is None or not self.activated:
             return self
         try:
@@ -234,6 +248,8 @@ class BlockBusterFunction:
             filename (str): The filename that contains the functions.
             functions (str | Iterable[str]): The functions where blocking is allowed.
 
+        Returns:
+            This BlockBusterFunction.
         """
         if isinstance(functions, str):
             functions = {functions}
@@ -697,6 +713,9 @@ def blockbuster_ctx(
             It is helpful for instance if the tests use a pytest plugin that is
             part of the scanned modules.
             Can be a list of module names or module objects.
+
+    Yields:
+        The BlockBuster context.
     """
     blockbuster = BlockBuster(scanned_modules, excluded_modules=excluded_modules)
     blockbuster.activate()

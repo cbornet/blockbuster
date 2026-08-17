@@ -79,10 +79,12 @@ import time
 from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
 from typing import Iterator
 
+
 @pytest.fixture(autouse=True)
 def blockbuster() -> Iterator[BlockBuster]:
     with blockbuster_ctx() as bb:
         yield bb
+
 
 async def test_time_sleep() -> None:
     with pytest.raises(BlockingError, match="sleep"):
@@ -184,7 +186,9 @@ from blockbuster import BlockBuster, BlockBusterFunction
 import mymodule
 
 blockbuster = BlockBuster()
-blockbuster.functions["my_module.my_function"] = BlockBusterFunction(my_module, "my_function")
+blockbuster.functions["my_module.my_function"] = BlockBusterFunction(
+    my_module, "my_function"
+)
 blockbuster.activate()
 ```
 
@@ -195,7 +199,9 @@ from blockbuster import blockbuster_ctx, BlockBusterFunction
 import mymodule
 
 with blockbuster_ctx() as blockbuster:
-    blockbuster.functions["my_module.my_function"] = BlockBusterFunction(my_module, "my_function")
+    blockbuster.functions["my_module.my_function"] = BlockBusterFunction(
+        my_module, "my_function"
+    )
     blockbuster.functions["my_module.my_function"].activate()
 ```
 
