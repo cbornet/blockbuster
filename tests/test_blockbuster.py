@@ -228,10 +228,10 @@ async def test_import_module() -> None:
 async def test_coverage_source_reads_are_allowed() -> None:
     assert get_python_source(__file__)
     assert read_python_source(__file__)
-    with pytest.raises(BlockingError, match="Blocking call to os.stat"):
+    with pytest.raises(BlockingError, match=r"Blocking call to os.stat"):
         os.stat(__file__)
     with Path(__file__).open("rb") as file, pytest.raises(  # noqa: ASYNC230
-        BlockingError, match="Blocking call to io.BufferedReader.read"
+        BlockingError, match=r"Blocking call to io.BufferedReader.read"
     ):
         file.read()
 
@@ -259,10 +259,10 @@ async def test_coverage_sysmon_source_reads(
     blockbuster.functions["io.BufferedReader.read"].activate()
     cov.report([str(test_file)])
 
-    with pytest.raises(BlockingError, match="Blocking call to os.stat"):
+    with pytest.raises(BlockingError, match=r"Blocking call to os.stat"):
         os.stat(test_file)
     with test_file.open("rb") as file, pytest.raises(
-        BlockingError, match="Blocking call to io.BufferedReader.read"
+        BlockingError, match=r"Blocking call to io.BufferedReader.read"
     ):
         file.read()
 
