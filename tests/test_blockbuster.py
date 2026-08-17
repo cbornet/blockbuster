@@ -215,29 +215,6 @@ async def test_custom_stack_exclude(blockbuster: BlockBuster, test_file: Path) -
     allowed_read(test_file)
 
 
-async def test_blockbuster_skip_is_task_local() -> None:
-    skipped_task_ready = asyncio.Event()
-    blocked_task_done = asyncio.Event()
-
-    async def skip_blockbuster() -> None:
-        token = blockbuster_skip.set(True)
-        try:
-            skipped_task_ready.set()
-            await blocked_task_done.wait()
-            time.sleep(0)  # noqa: ASYNC251
-        finally:
-            blockbuster_skip.reset(token)
-
-    async def expect_blocking_error() -> None:
-        await skipped_task_ready.wait()
-        with pytest.raises(BlockingError, match=r"Blocking call to time.sleep"):
-            time.sleep(0)  # noqa: ASYNC251
-        blocked_task_done.set()
-
-    await asyncio.gather(skip_blockbuster(), expect_blocking_error())
-    assert blockbuster_skip.get(False) is False
-
-
 async def test_cleanup(blockbuster: BlockBuster, test_file: Path) -> None:
     blockbuster.deactivate()
     with test_file.open(mode="wb") as f:
@@ -484,3 +461,26 @@ def test_can_block_in_builder(blockbuster: BlockBuster) -> None:
     )
     assert ("foo.py", {"bar"}) in blockbuster.functions["os.stat"].can_block_functions
     assert ("baz.py", {"qux"}) in blockbuster.functions["os.stat"].can_block_functions
+
+
+async def test_blockbuster_skip_is_task_local() -> None:
+    skipped_task_ready = asyncio.Event()
+    blocked_task_done = asyncio.Event()
+
+    async def skip_blockbuster() -> None:
+        token = blockbuster_skip.set(True)
+        try:
+            skipped_task_ready.set()
+            await blocked_task_done.wait()
+            time.sleep(0)  # noqa: ASYNC251
+        finally:
+            blockbuster_skip.reset(token)
+
+    async def expect_blocking_error() -> None:
+        await skipped_task_ready.wait()
+        with pytest.raises(BlockingError, match=r"Blocking call to time.sleep"):
+            time.sleep(0)  # noqa: ASYNC251
+        blocked_task_done.set()
+
+    await asyncio.gather(skip_blockbuster(), expect_blocking_error())
+    assert blockbuster_skip.get(False) is False
