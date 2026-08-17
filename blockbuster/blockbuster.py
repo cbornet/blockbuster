@@ -205,7 +205,6 @@ class BlockBusterFunction:
         """
         if self.original_func is None or self.activated:
             return self
-        self.activated = True
         checker = _wrap_blocking(
             self._scanned_modules,
             self._excluded_modules,
@@ -217,8 +216,10 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, checker)
         except TypeError:
-            if HAS_FORBIDDENFRUIT:
-                forbiddenfruit.curse(self.module, self.func_name, checker)
+            if not HAS_FORBIDDENFRUIT:
+                return self
+            forbiddenfruit.curse(self.module, self.func_name, checker)
+        self.activated = True
         return self
 
     def deactivate(self) -> BlockBusterFunction:
@@ -229,12 +230,13 @@ class BlockBusterFunction:
         """
         if self.original_func is None or not self.activated:
             return self
-        self.activated = False
         try:
             setattr(self.module, self.func_name, self.original_func)
         except TypeError:
-            if HAS_FORBIDDENFRUIT:
-                forbiddenfruit.curse(self.module, self.func_name, self.original_func)
+            if not HAS_FORBIDDENFRUIT:
+                return self
+            forbiddenfruit.curse(self.module, self.func_name, self.original_func)
+        self.activated = False
         return self
 
     def can_block_in(
@@ -677,8 +679,17 @@ class BlockBuster:
 
     def activate(self) -> None:
         """Activate all the functions."""
-        for wrapped_function in self.functions.values():
-            wrapped_function.activate()
+        activated_functions: list[BlockBusterFunction] = []
+        try:
+            for wrapped_function in self.functions.values():
+                was_activated = wrapped_function.activated
+                wrapped_function.activate()
+                if wrapped_function.activated and not was_activated:
+                    activated_functions.append(wrapped_function)
+        except BaseException:
+            for wrapped_function in reversed(activated_functions):
+                wrapped_function.deactivate()
+            raise
 
     def deactivate(self) -> None:
         """Deactivate all the functions."""
@@ -708,5 +719,7 @@ def blockbuster_ctx(
     """
     blockbuster = BlockBuster(scanned_modules, excluded_modules=excluded_modules)
     blockbuster.activate()
-    yield blockbuster
-    blockbuster.deactivate()
+    try:
+        yield blockbuster
+    finally:
+        blockbuster.deactivate()
