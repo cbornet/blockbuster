@@ -206,10 +206,9 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, checker)
         except TypeError:
-            if HAS_FORBIDDENFRUIT:
-                forbiddenfruit.curse(self.module, self.func_name, checker)
-            else:
+            if not HAS_FORBIDDENFRUIT:
                 return self
+            forbiddenfruit.curse(self.module, self.func_name, checker)
         self.activated = True
         return self
 
@@ -220,10 +219,9 @@ class BlockBusterFunction:
         try:
             setattr(self.module, self.func_name, self.original_func)
         except TypeError:
-            if HAS_FORBIDDENFRUIT:
-                forbiddenfruit.curse(self.module, self.func_name, self.original_func)
-            else:
+            if not HAS_FORBIDDENFRUIT:
                 return self
+            forbiddenfruit.curse(self.module, self.func_name, self.original_func)
         self.activated = False
         return self
 
