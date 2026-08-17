@@ -236,35 +236,35 @@ async def test_coverage_source_reads_are_allowed() -> None:
         file.read()
 
 
+def branch_for_coverage(n: int) -> int:
+    # A branch in this module makes sys.monitoring emit BRANCH_LEFT/BRANCH_RIGHT,
+    # which is what drives coverage to read this file's source mid-collection.
+    if n > 1:
+        return n * 2
+    return n
+
+
 @pytest.mark.skipif(
-    sys.version_info < (3, 14), reason="coverage sys.monitoring requires Python 3.14"
+    sys.version_info < (3, 14),
+    reason="coverage only measures branches with sys.monitoring on Python 3.14+",
 )
-async def test_coverage_sysmon_source_reads(
-    blockbuster: BlockBuster, test_file: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_coverage_sysmon_branch_source_reads(blockbuster: BlockBuster) -> None:
     for function in blockbuster.functions.values():
         function.deactivate()
     coverage = pytest.importorskip("coverage")
-    monkeypatch.setenv("COVERAGE_CORE", "sysmon")
-    test_file.write_text("if True:\n    value = 1\n", encoding="utf-8")
-    code = compile(test_file.read_text(), str(test_file), "exec")
-    cov = coverage.Coverage(branch=True)
-    cov.start()
-    assert cov._collector.tracer_name() == "SysMonitor"  # noqa: SLF001
-    namespace: dict[str, object] = {}
-    exec(code, namespace)  # noqa: S102
-    cov.stop()
-    cov.save()
-    blockbuster.functions["os.stat"].activate()
-    blockbuster.functions["io.BufferedReader.read"].activate()
-    cov.report([str(test_file)])
 
-    with pytest.raises(BlockingError, match=r"Blocking call to os.stat"):
-        os.stat(test_file)
-    with test_file.open("rb") as file, pytest.raises(
-        BlockingError, match=r"Blocking call to io.BufferedReader.read"
-    ):
-        file.read()
+    value = 3
+    cov = coverage.Coverage(branch=True, source=[str(Path(__file__).parent)])
+    cov.start()
+    try:
+        assert cov._collector.tracer_name() == "SysMonitor"  # noqa: SLF001
+        blockbuster.functions["os.stat"].activate()
+        blockbuster.functions["io.BufferedReader.read"].activate()
+        assert branch_for_coverage(value) == value * 2
+    finally:
+        for function in blockbuster.functions.values():
+            function.deactivate()
+        cov.stop()
 
 
 def allowed_read(test_file: Path) -> None:

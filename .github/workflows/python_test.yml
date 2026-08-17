@@ -48,8 +48,8 @@ jobs:
       - name: Minimize uv cache
         run: uv cache prune --ci
 
-  coverage-sysmon:
-    name: Coverage sys.monitoring - Python 3.14
+  coverage-branch:
+    name: Branch coverage under sys.monitoring - Python 3.14
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,9 +66,9 @@ jobs:
           python-version: '3.14'
       - name: Install the project
         run: uv sync --dev
-      - name: Test coverage source reads
-        env:
-          COVERAGE_CORE: sysmon
-        run: uv run --with 'coverage>=7.13' pytest tests/test_blockbuster.py::test_coverage_sysmon_source_reads -vv
+      # On 3.14 coverage defaults to the sys.monitoring core, and --branch is what
+      # makes it read source files from inside the monitoring callback.
+      - name: Run the test suite under branch coverage
+        run: uv run coverage run --branch -m pytest tests -vv
       - name: Minimize uv cache
         run: uv cache prune --ci
