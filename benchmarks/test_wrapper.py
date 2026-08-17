@@ -6,6 +6,7 @@ CI runs `pytest tests`, so these are opt-in: `uv run pytest benchmarks`.
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from blockbuster.blockbuster import BlockBuster, BlockingError, _wrap_blocking
@@ -13,7 +14,7 @@ from blockbuster.blockbuster import BlockBuster, BlockingError, _wrap_blocking
 if TYPE_CHECKING:
     from pytest_benchmark.fixture import BenchmarkFixture
 
-_THIS_FILE = "test_wrapper.py"
+_THIS_FILE = Path(__file__).name
 
 
 def _noop() -> None:
