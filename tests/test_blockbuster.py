@@ -21,7 +21,6 @@ from typing import Any, Callable, Iterator, TypeVar
 import pytest
 import requests
 
-import blockbuster.blockbuster as blockbuster_module
 import tests
 from blockbuster import BlockBuster, BlockBusterFunction, BlockingError, blockbuster_ctx
 from tests import subpackage
@@ -267,7 +266,7 @@ def test_context_manager_deactivates_after_error(blockbuster: BlockBuster) -> No
     message = "context failed"
 
     def fail_in_context() -> None:
-        with blockbuster_module.blockbuster_ctx():
+        with blockbuster_ctx():
             assert time.sleep is not original_sleep
             raise RuntimeError(message)
 
