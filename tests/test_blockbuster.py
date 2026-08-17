@@ -12,15 +12,17 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from asyncio import events
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Callable, Iterator, TypeVar
 
 import pytest
 import requests
 
 import tests
-from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
+from blockbuster import BlockBuster, BlockBusterFunction, BlockingError, blockbuster_ctx
 from blockbuster.blockbuster import blockbuster_skip
 from tests import subpackage
 
@@ -215,10 +217,96 @@ async def test_custom_stack_exclude(blockbuster: BlockBuster, test_file: Path) -
     allowed_read(test_file)
 
 
+_VIRTUAL_CALL_NAME = "blocking_call"
+
+
+def _call_from_virtual_file(filename: str) -> None:
+    sleep: Callable[[], None] = functools.partial(time.sleep, 0)
+    source = f"def {_VIRTUAL_CALL_NAME}():\n    sleep()"
+    namespace = {"sleep": sleep}
+    exec(compile(source, filename, "exec"), namespace)
+    namespace[_VIRTUAL_CALL_NAME]()
+
+
+@pytest.mark.parametrize(
+    ("filename", "allowed_suffix"),
+    [
+        (r"C:\project\package\allowed.py", "package/allowed.py"),
+        ("<frozen allowed_module>", "<frozen allowed_module>"),
+        ("/app/archive.pyz/package/allowed.py", "package/allowed.py"),
+    ],
+)
+async def test_can_block_in_virtual_file(
+    blockbuster: BlockBuster, filename: str, allowed_suffix: str
+) -> None:
+    blockbuster.functions["time.sleep"].can_block_in(allowed_suffix, _VIRTUAL_CALL_NAME)
+    _call_from_virtual_file(filename)
+
+
+async def test_blocking_error_trace_includes_virtual_callsite() -> None:
+    filename = "/app/archive.pyz/package/blocked.py"
+    with pytest.raises(BlockingError) as exc_info:
+        _call_from_virtual_file(filename)
+
+    frames = traceback.extract_tb(exc_info.value.__traceback__)
+    assert any(
+        frame.filename == filename and frame.name == _VIRTUAL_CALL_NAME
+        for frame in frames
+    )
+
+
 async def test_cleanup(blockbuster: BlockBuster, test_file: Path) -> None:
     blockbuster.deactivate()
     with test_file.open(mode="wb") as f:
         f.write(b"foo")
+
+
+def test_context_manager_deactivates_after_error(blockbuster: BlockBuster) -> None:
+    blockbuster.deactivate()
+    original_sleep = time.sleep
+    message = "context failed"
+
+    def fail_in_context() -> None:
+        with blockbuster_ctx():
+            assert time.sleep is not original_sleep
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match=message):
+        fail_in_context()
+
+    assert time.sleep is original_sleep
+
+
+def _raise_activation_error() -> None:
+    message = "activation failed"
+    raise RuntimeError(message)
+
+
+def _noop() -> None:
+    pass
+
+
+class _TestFunctions(ModuleType):
+    first = _noop
+    second = _noop
+
+
+def test_partial_activation_is_rolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _TestFunctions("test_partial_activation")
+    first = BlockBusterFunction(module, "first")
+    second = BlockBusterFunction(module, "second")
+    blockbuster = BlockBuster()
+    blockbuster.functions = {"first": first, "second": second}
+    monkeypatch.setattr(second, "activate", _raise_activation_error)
+
+    with pytest.raises(RuntimeError, match="activation failed"):
+        blockbuster.activate()
+
+    assert module.__dict__["first"] is first.original_func
+    assert first.activated is False
+    assert second.activated is False
 
 
 async def test_scanned_modules(blockbuster: BlockBuster, test_file: Path) -> None:
