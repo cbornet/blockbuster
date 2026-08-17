@@ -37,6 +37,8 @@ if platform.python_implementation() == "CPython":
 else:
     HAS_FORBIDDENFRUIT = False
 
+logger = logging.getLogger(__name__)
+
 
 class BlockingError(Exception):
     """BlockingError class."""
@@ -132,7 +134,7 @@ def _resolve_module_paths(modules: _ModuleOrModuleList | _ModulePaths) -> _Modul
         elif file := module_.__file__:
             resolved.append(file)
         else:
-            logging.warning("Cannot get path for %s", module_)
+            logger.warning("Cannot get path for %s", module_)
     return _ModulePaths(resolved)
 
 
@@ -169,6 +171,10 @@ class BlockBusterFunction:
             can_block_predicate: An optional predicate that determines if blocking is
                 allowed.
 
+        Raises:
+            ValueError: If module is not provided and the function name doesn't contain
+                a dot.
+
         """
         if module:
             self.module = module
@@ -197,7 +203,11 @@ class BlockBusterFunction:
         self._excluded_modules = _resolve_module_paths(excluded_modules).paths
 
     def activate(self) -> BlockBusterFunction:
-        """Activate the blocking detection."""
+        """Activate the blocking detection.
+
+        Returns:
+            This BlockBusterFunction.
+        """
         if self.original_func is None or self.activated:
             return self
         self.activated = True
@@ -217,7 +227,11 @@ class BlockBusterFunction:
         return self
 
     def deactivate(self) -> BlockBusterFunction:
-        """Deactivate the blocking detection."""
+        """Deactivate the blocking detection.
+
+        Returns:
+            This BlockBusterFunction.
+        """
         if self.original_func is None or not self.activated:
             return self
         self.activated = False
@@ -237,6 +251,8 @@ class BlockBusterFunction:
             filename (str): The filename that contains the functions.
             functions (str | Iterable[str]): The functions where blocking is allowed.
 
+        Returns:
+            This BlockBusterFunction.
         """
         if isinstance(functions, str):
             functions = {functions}
@@ -699,6 +715,9 @@ def blockbuster_ctx(
             It is helpful for instance if the tests use a pytest plugin that is
             part of the scanned modules.
             Can be a list of module names or module objects.
+
+    Yields:
+        The BlockBuster context.
     """
     blockbuster = BlockBuster(scanned_modules, excluded_modules=excluded_modules)
     blockbuster.activate()
