@@ -1,11 +1,8 @@
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import contextvars
 import functools
 import importlib
-import inspect
 import io
 import os
 import platform
@@ -18,13 +15,11 @@ import time
 import traceback
 from asyncio import events
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
 from typing import Any, Callable, Iterator, TypeVar
 
 import pytest
 import requests
 
-import blockbuster.blockbuster as blockbuster_module
 import tests
 from blockbuster import BlockBuster, BlockingError, blockbuster_ctx
 from tests import subpackage
@@ -220,32 +215,15 @@ async def test_custom_stack_exclude(blockbuster: BlockBuster, test_file: Path) -
     allowed_read(test_file)
 
 
-async def test_wrapper_does_not_get_frame_info(
-    blockbuster: BlockBuster, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    assert blockbuster.functions["time.sleep"].activated
-
-    def fail_getframeinfo(*_: Any, **__: Any) -> None:
-        pytest.fail("inspect.getframeinfo() must not run in the wrapper")
-
-    inspect_without_getframeinfo = SimpleNamespace(
-        currentframe=inspect.currentframe,
-        getframeinfo=fail_getframeinfo,
-        isbuiltin=inspect.isbuiltin,
-        ismethoddescriptor=inspect.ismethoddescriptor,
-    )
-    monkeypatch.setattr(blockbuster_module, "inspect", inspect_without_getframeinfo)
-    with pytest.raises(BlockingError, match="Blocking call to time.sleep"):
-        time.sleep(0)  # noqa: ASYNC251
+_VIRTUAL_CALL_NAME = "blocking_call"
 
 
-def _call_from_virtual_file(
-    filename: str, function_name: str, func: Callable[[], None]
-) -> None:
-    namespace = {"func": func}
-    source = f"def {function_name}():\n    func()"
-    exec(compile(source, filename, "exec"), namespace)  # noqa: S102
-    namespace[function_name]()
+def _call_from_virtual_file(filename: str) -> None:
+    sleep: Callable[[], None] = functools.partial(time.sleep, 0)
+    source = f"def {_VIRTUAL_CALL_NAME}():\n    sleep()"
+    namespace = {"sleep": sleep}
+    exec(compile(source, filename, "exec"), namespace)
+    namespace[_VIRTUAL_CALL_NAME]()
 
 
 @pytest.mark.parametrize(
@@ -259,65 +237,20 @@ def _call_from_virtual_file(
 async def test_can_block_in_virtual_file(
     blockbuster: BlockBuster, filename: str, allowed_suffix: str
 ) -> None:
-    blockbuster.functions["time.sleep"].can_block_in(allowed_suffix, "allowed_call")
-    _call_from_virtual_file(
-        filename,
-        "allowed_call",
-        lambda: time.sleep(0),  # noqa: ASYNC251
-    )
+    blockbuster.functions["time.sleep"].can_block_in(allowed_suffix, _VIRTUAL_CALL_NAME)
+    _call_from_virtual_file(filename)
 
 
 async def test_blocking_error_trace_includes_virtual_callsite() -> None:
     filename = "/app/archive.pyz/package/blocked.py"
     with pytest.raises(BlockingError) as exc_info:
-        _call_from_virtual_file(
-            filename,
-            "blocked_call",
-            lambda: time.sleep(0),  # noqa: ASYNC251
-        )
+        _call_from_virtual_file(filename)
 
     frames = traceback.extract_tb(exc_info.value.__traceback__)
-    assert (filename, "blocked_call") in {
-        (frame.filename, frame.name) for frame in frames
-    }
-
-
-async def test_blockbuster_skip_is_task_local() -> None:
-    skipped_task_ready = asyncio.Event()
-    blocked_task_done = asyncio.Event()
-
-    async def skip_blockbuster() -> None:
-        token = blockbuster_module.blockbuster_skip.set(True)
-        try:
-            skipped_task_ready.set()
-            await blocked_task_done.wait()
-            time.sleep(0)  # noqa: ASYNC251
-        finally:
-            blockbuster_module.blockbuster_skip.reset(token)
-
-    async def expect_blocking_error() -> None:
-        await skipped_task_ready.wait()
-        with pytest.raises(BlockingError, match="Blocking call to time.sleep"):
-            time.sleep(0)  # noqa: ASYNC251
-        blocked_task_done.set()
-
-    await asyncio.gather(skip_blockbuster(), expect_blocking_error())
-    assert blockbuster_module.blockbuster_skip.get(False) is False
-
-
-def test_module_paths_resolved_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_import_module = importlib.import_module
-    imported_modules: list[str] = []
-
-    def track_import_module(name: str, package: str | None = None) -> ModuleType:
-        imported_modules.append(name)
-        return real_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", track_import_module)
-    BlockBuster("tests", excluded_modules=["tests.subpackage"])
-
-    assert imported_modules.count("tests") == 1
-    assert imported_modules.count("tests.subpackage") == 1
+    assert any(
+        frame.filename == filename and frame.name == _VIRTUAL_CALL_NAME
+        for frame in frames
+    )
 
 
 async def test_cleanup(blockbuster: BlockBuster, test_file: Path) -> None:

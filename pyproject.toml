@@ -40,6 +40,7 @@ dev = [
     "requests>=2.32.3",
     "types-requests>=2.32.0.20241016",
     "aiofile>=3.9.0",
+    "pytest-benchmark>=4.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -64,6 +65,7 @@ flake8-annotations.mypy-init-return = true
     "ASYNC240",
     "D1",
     "S101",
+    "S102",
     "PTH",
 ]
 
