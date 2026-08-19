@@ -456,6 +456,12 @@ def _get_io_wrapped_functions(
             file.fileno()
         except io.UnsupportedOperation:
             return not file.isatty()
+        except AttributeError:
+            # A `tarfile.ExFileObject` is an `io.BufferedReader` over a raw
+            # object implementing neither `fileno` nor `isatty`. It reads through
+            # to the enclosing archive, so it blocks and must not escape as an
+            # `AttributeError`.
+            pass
         return False
 
     def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
