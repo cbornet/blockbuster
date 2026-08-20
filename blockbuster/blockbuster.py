@@ -456,6 +456,14 @@ def _get_io_wrapped_functions(
             file.fileno()
         except io.UnsupportedOperation:
             return not file.isatty()
+        except AttributeError:
+            # The wrapped raw object implements neither `fileno` nor `isatty`,
+            # so nothing is left to prove the read won't hit the disk: treat any
+            # file reaching this branch as blocking. That is correct for a
+            # `tarfile.ExFileObject`, which reads through to the enclosing
+            # archive, and is the deliberate default for any other file type
+            # that lands here.
+            pass
         return False
 
     def file_write_exclude(file: io.IOBase, *_: Any, **__: Any) -> bool:
