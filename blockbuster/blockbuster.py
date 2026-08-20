@@ -457,10 +457,12 @@ def _get_io_wrapped_functions(
         except io.UnsupportedOperation:
             return not file.isatty()
         except AttributeError:
-            # A `tarfile.ExFileObject` is an `io.BufferedReader` over a raw
-            # object implementing neither `fileno` nor `isatty`. It reads through
-            # to the enclosing archive, so it blocks and must not escape as an
-            # `AttributeError`.
+            # The wrapped raw object implements neither `fileno` nor `isatty`,
+            # so nothing is left to prove the read won't hit the disk: treat any
+            # file reaching this branch as blocking. That is correct for a
+            # `tarfile.ExFileObject`, which reads through to the enclosing
+            # archive, and is the deliberate default for any other file type
+            # that lands here.
             pass
         return False
 
