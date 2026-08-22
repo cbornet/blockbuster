@@ -371,7 +371,9 @@ def _get_os_wrapped_functions(
         excluded_modules=excluded_modules,
     )
 
-    if platform.python_implementation() != "CPython" or sys.version_info >= (3, 9):
+    if platform.python_implementation() != "CPython" or (
+        (3, 9) <= sys.version_info < (3, 15)
+    ):
         with os.scandir() as scandir_it:
             functions["os.scandir"] = BlockBusterFunction(
                 type(scandir_it),
@@ -379,6 +381,13 @@ def _get_os_wrapped_functions(
                 scanned_modules=modules,
                 excluded_modules=excluded_modules,
             )
+    else:
+        functions["os.scandir"] = BlockBusterFunction(
+            None,
+            "os.scandir",
+            scanned_modules=modules,
+            excluded_modules=excluded_modules,
+        )
 
     for method in (
         "ismount",
