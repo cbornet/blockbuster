@@ -53,16 +53,6 @@ class BlockingError(Exception):
         super().__init__(f"Blocking call to {func}")
 
 
-def _blocking_error(func: Callable[..., Any]) -> BlockingError:
-    if inspect.isbuiltin(func):
-        msg = f"Blocking call to {func.__qualname__} ({func.__self__})"
-    elif inspect.ismethoddescriptor(func):
-        msg = f"Blocking call to {func}"
-    else:
-        msg = f"Blocking call to {func.__module__}.{func.__qualname__}"
-    return BlockingError(msg)
-
-
 _T = TypeVar("_T")
 
 blockbuster_skip: ContextVar[bool] = ContextVar("blockbuster_skip")
@@ -316,6 +306,7 @@ def _get_os_wrapped_functions(
         can_block_functions=[
             ("<frozen importlib._bootstrap>", {"_find_and_load"}),
             ("linecache.py", {"checkcache", "updatecache"}),
+            ("<frozen linecache>", {"checkcache", "updatecache"}),
             ("coverage/control.py", {"_should_trace"}),
             ("coverage/python.py", {"get_python_source"}),
             ("asyncio/unix_events.py", {"create_unix_server", "_stop_serving"}),
@@ -381,13 +372,6 @@ def _get_os_wrapped_functions(
                 scanned_modules=modules,
                 excluded_modules=excluded_modules,
             )
-    else:
-        functions["os.scandir"] = BlockBusterFunction(
-            None,
-            "os.scandir",
-            scanned_modules=modules,
-            excluded_modules=excluded_modules,
-        )
 
     for method in (
         "ismount",
