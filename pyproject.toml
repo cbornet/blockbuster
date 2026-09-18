@@ -1,6 +1,6 @@
 [project]
 name = "blockbuster"
-version = "1.5.28"
+version = "1.6.0"
 description = "Utility to detect blocking calls in the async event loop"
 readme = "README.md"
 keywords = ["async", "block", "detect", "event loop", "asyncio"]
@@ -12,7 +12,7 @@ dependencies = [
     "forbiddenfruit>=0.1.4; implementation_name== 'cpython'",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Build Tools",
     "License :: OSI Approved :: Apache Software License",
@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 
 [project.urls]
