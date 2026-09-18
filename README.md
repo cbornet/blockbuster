@@ -33,7 +33,7 @@ So it is recommended to constrain the Blockbuster version on the minor version.
 For instance, with `uv`:
 
 ```bash
-uv add "blockbuster>=1.5.5,<1.6"
+uv add "blockbuster>=1.6.0,<1.7"
 ```
 
 ## Using BlockBuster
