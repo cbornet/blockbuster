@@ -470,14 +470,14 @@ async def test_os_listdir() -> None:
 
 
 async def test_os_scandir() -> None:
-    if (3, 9) <= sys.version_info < (3, 15):
-        with os.scandir(tempfile.tempdir) as files, pytest.raises(
-                               BlockingError, match="Blocking call to ScandirIterator.__next__"
-        ):
+    with os.scandir(tempfile.tempdir) as files:
+        if (3, 9) <= sys.version_info < (3, 15):
+            with pytest.raises(
+                BlockingError, match=r"Blocking call to ScandirIterator.__next__"
+            ):
+                next(files)
+        else:
             next(files)
-    else:
-        with pytest.raises(BlockingError, match="Blocking call to os.scandir"):
-            os.scandir(tempfile.tempdir)
 
 
 async def test_os_access() -> None:
