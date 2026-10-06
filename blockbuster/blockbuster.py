@@ -11,6 +11,7 @@ import logging
 import os
 import platform
 import sys
+import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
 from types import ModuleType
@@ -24,7 +25,6 @@ class _ModulePaths:
 
 if TYPE_CHECKING:
     import socket
-    import threading
     from collections.abc import Callable, Iterable, Iterator, Sequence
 
     _ModuleList = Union[Sequence[Union[str, ModuleType]], _ModulePaths, None]
@@ -58,6 +58,21 @@ _T = TypeVar("_T")
 blockbuster_skip: ContextVar[bool] = ContextVar("blockbuster_skip")
 
 
+class _UpdatingSkip(threading.local):
+    """Per-thread flag set while ``blockbuster_skip`` is being updated.
+
+    On CPython 3.10/3.11, ContextVar.set()/reset() can trigger a cyclic GC run
+    while the context's HAMT is being updated. A finalizer calling a wrapped
+    function would then re-enter set() on the same context (use-after-free).
+    This flag makes such re-entrant calls bypass the wrapper.
+    """
+
+    value = False
+
+
+_updating_skip = _UpdatingSkip()
+
+
 def _wrap_blocking(
     modules: Sequence[str],
     excluded_modules: Sequence[str],
@@ -69,13 +84,17 @@ def _wrap_blocking(
     """Wrap blocking function."""
 
     def wrapper(*args: Any, **kwargs: Any) -> _T:
-        if blockbuster_skip.get(False):
+        if _updating_skip.value or blockbuster_skip.get(False):
             return func(*args, **kwargs)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             return func(*args, **kwargs)
-        skip_token = blockbuster_skip.set(True)
+        _updating_skip.value = True
+        try:
+            skip_token = blockbuster_skip.set(True)
+        finally:
+            _updating_skip.value = False
         try:
             if can_block_predicate(*args, **kwargs):
                 return func(*args, **kwargs)
@@ -106,7 +125,11 @@ def _wrap_blocking(
                 raise BlockingError(func_name)
             return func(*args, **kwargs)
         finally:
-            blockbuster_skip.reset(skip_token)
+            _updating_skip.value = True
+            try:
+                blockbuster_skip.reset(skip_token)
+            finally:
+                _updating_skip.value = False
 
     return wrapper
 
