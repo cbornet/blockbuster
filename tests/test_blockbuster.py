@@ -522,22 +522,17 @@ async def test_os_path_islink() -> None:
         os.path.islink("/1")
 
 
-# posixpath.realpath resolves through os.lstat; ntpath.realpath goes through
-# os.getcwd or os.path.abspath before calling nt._getfinalpathname.
-_REALPATH_BLOCKING_CALL = (
-    r"Blocking call to os\.(getcwd|path\.abspath)"
-    if platform.system() == "Windows"
-    else r"Blocking call to os\.lstat"
-)
-
-
 async def test_os_path_realpath() -> None:
-    with pytest.raises(BlockingError, match=_REALPATH_BLOCKING_CALL):
+    with pytest.raises(BlockingError, match=r"Blocking call to os.path.realpath"):
         os.path.realpath("/1")
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10),
+    reason="pathlib.Path.resolve goes through os.path.realpath since Python 3.10",
+)
 async def test_pathlib_path_resolve() -> None:
-    with pytest.raises(BlockingError, match=_REALPATH_BLOCKING_CALL):
+    with pytest.raises(BlockingError, match=r"Blocking call to os.path.realpath"):
         Path("/1").resolve()
 
 

@@ -419,6 +419,18 @@ def _get_os_wrapped_functions(
         excluded_modules=excluded_modules,
     )
 
+    functions["os.path.realpath"] = BlockBusterFunction(
+        None,
+        "os.path.realpath",
+        can_block_functions=[
+            ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
+            ("coverage/control.py", {"_should_trace"}),
+            ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return hasattr(os, "get_blocking") and not os.get_blocking(fd)
 
