@@ -11,8 +11,8 @@ import logging
 import os
 import platform
 import sys
+import threading
 from contextlib import contextmanager
-from contextvars import ContextVar
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
@@ -24,7 +24,6 @@ class _ModulePaths:
 
 if TYPE_CHECKING:
     import socket
-    import threading
     from collections.abc import Callable, Iterable, Iterator, Sequence
 
     _ModuleList = Union[Sequence[Union[str, ModuleType]], _ModulePaths, None]
@@ -55,7 +54,12 @@ class BlockingError(Exception):
 
 _T = TypeVar("_T")
 
-blockbuster_skip: ContextVar[bool] = ContextVar("blockbuster_skip")
+
+class _Skip(threading.local):
+    value = False
+
+
+_skip = _Skip()
 
 
 def _wrap_blocking(
@@ -69,13 +73,13 @@ def _wrap_blocking(
     """Wrap blocking function."""
 
     def wrapper(*args: Any, **kwargs: Any) -> _T:
-        if blockbuster_skip.get(False):
+        if _skip.value:
             return func(*args, **kwargs)
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             return func(*args, **kwargs)
-        skip_token = blockbuster_skip.set(True)
+        _skip.value = True
         try:
             if can_block_predicate(*args, **kwargs):
                 return func(*args, **kwargs)
@@ -106,7 +110,7 @@ def _wrap_blocking(
                 raise BlockingError(func_name)
             return func(*args, **kwargs)
         finally:
-            blockbuster_skip.reset(skip_token)
+            _skip.value = False
 
     return wrapper
 
