@@ -527,12 +527,8 @@ async def test_os_path_realpath() -> None:
         os.path.realpath("/1")
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="Path.resolve calls os.path.realpath via the module since Python 3.11",
-)
 async def test_pathlib_path_resolve() -> None:
-    with pytest.raises(BlockingError, match=r"Blocking call to os.path.realpath"):
+    with pytest.raises(BlockingError, match=r"Blocking call to pathlib.Path.resolve"):
         Path("/1").resolve()
 
 

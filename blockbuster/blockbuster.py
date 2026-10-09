@@ -431,6 +431,13 @@ def _get_os_wrapped_functions(
         excluded_modules=excluded_modules,
     )
 
+    functions["pathlib.Path.resolve"] = BlockBusterFunction(
+        None,
+        "pathlib.Path.resolve",
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
     def os_rw_exclude(fd: int, *_: Any, **__: Any) -> bool:
         return hasattr(os, "get_blocking") and not os.get_blocking(fd)
 
