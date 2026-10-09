@@ -118,6 +118,7 @@ Blockbuster supports by default the following functions and modules:
   - `os.scandir`
   - `os.access`
   - `os.stat`
+  - `os.lstat`
   - `os.replace`
   - `os.read`
   - `os.write`

@@ -315,6 +315,21 @@ def _get_os_wrapped_functions(
         excluded_modules=excluded_modules,
     )
 
+    # os.lstat is the system call behind os.path.islink and, since Python 3.13,
+    # the only one os.path.realpath (hence pathlib.Path.resolve) makes for a path
+    # that contains no symlink: realpath no longer goes through os.path.abspath,
+    # so without this wrapper those calls are invisible to the detector.
+    functions["os.lstat"] = BlockBusterFunction(
+        None,
+        "os.lstat",
+        can_block_functions=[
+            ("coverage/control.py", {"_should_trace"}),
+            ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
     functions["os.mkdir"] = BlockBusterFunction(
         None,
         "os.mkdir",

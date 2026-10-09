@@ -392,6 +392,11 @@ async def test_os_stat() -> None:
         os.stat("/1")
 
 
+async def test_os_lstat() -> None:
+    with pytest.raises(BlockingError, match=r"Blocking call to os.lstat"):
+        os.lstat("/1")
+
+
 async def test_os_getcwd() -> None:
     with pytest.raises(BlockingError, match=r"Blocking call to os.getcwd"):
         os.getcwd()
@@ -515,6 +520,25 @@ async def test_os_path_isdir() -> None:
 async def test_os_path_islink() -> None:
     with pytest.raises(BlockingError, match=r"path.islink"):
         os.path.islink("/1")
+
+
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="os.path.realpath not detected on Windows at the moment",
+)
+async def test_os_path_realpath() -> None:
+    # Since Python 3.13 realpath only calls os.lstat for a symlink-free path
+    with pytest.raises(BlockingError, match=r"Blocking call to os.lstat"):
+        os.path.realpath("/1")
+
+
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Path.resolve not detected on Windows at the moment",
+)
+async def test_pathlib_path_resolve() -> None:
+    with pytest.raises(BlockingError, match=r"Blocking call to os.lstat"):
+        Path("/1").resolve()
 
 
 async def test_os_path_ismount() -> None:
