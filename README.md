@@ -118,6 +118,7 @@ Blockbuster supports by default the following functions and modules:
   - `os.scandir`
   - `os.access`
   - `os.stat`
+  - `os.lstat`
   - `os.replace`
   - `os.read`
   - `os.write`
@@ -127,6 +128,8 @@ Blockbuster supports by default the following functions and modules:
   - `os.path.sameopenfile`
   - `os.path.islink`
   - `os.path.abspath`
+  - `os.path.realpath`
+  - `pathlib.Path.resolve`
 - **IO Functions**:
   - `io.BufferedReader.read`
   - `io.BufferedWriter.write`

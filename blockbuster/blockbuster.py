@@ -319,6 +319,17 @@ def _get_os_wrapped_functions(
         excluded_modules=excluded_modules,
     )
 
+    functions["os.lstat"] = BlockBusterFunction(
+        None,
+        "os.lstat",
+        can_block_functions=[
+            ("coverage/control.py", {"_should_trace"}),
+            ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
     functions["os.mkdir"] = BlockBusterFunction(
         None,
         "os.mkdir",
@@ -408,6 +419,25 @@ def _get_os_wrapped_functions(
             ("coverage/control.py", {"_should_trace"}),
             ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
         ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
+    functions["os.path.realpath"] = BlockBusterFunction(
+        None,
+        "os.path.realpath",
+        can_block_functions=[
+            ("_pytest/assertion/rewrite.py", {"_should_rewrite"}),
+            ("coverage/control.py", {"_should_trace"}),
+            ("/pydevd_file_utils.py", {"get_abs_path_real_path_and_base_from_file"}),
+        ],
+        scanned_modules=modules,
+        excluded_modules=excluded_modules,
+    )
+
+    functions["pathlib.Path.resolve"] = BlockBusterFunction(
+        None,
+        "pathlib.Path.resolve",
         scanned_modules=modules,
         excluded_modules=excluded_modules,
     )
