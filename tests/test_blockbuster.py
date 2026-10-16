@@ -26,6 +26,9 @@ import tests
 from blockbuster import BlockBuster, BlockBusterFunction, BlockingError, blockbuster_ctx
 from tests import subpackage
 
+if sys.version_info >= (3, 9):
+    import zoneinfo
+
 _T = TypeVar("_T")
 
 
@@ -221,6 +224,11 @@ async def test_thread_start() -> None:
 
 async def test_import_module() -> None:
     importlib.reload(requests)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 9), reason="zoneinfo is not available")
+async def test_zoneinfo() -> None:
+    zoneinfo.ZoneInfo.no_cache("Europe/Paris")
 
 
 def allowed_read(test_file: Path) -> None:
